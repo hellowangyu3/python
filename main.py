@@ -8,13 +8,19 @@ from main_interface import Ui_MainWindow  # 导入生成的UI类
 import log
 from serial_bsp import SerialInterface
 from Upgrade_file_opt import get_file_version  # 新增：导入get_file_version方法
-
+import config
 
 log_wp = log.log_wp
 serial_if = SerialInterface()
 
 # 新增：创建主窗口逻辑类（继承QMainWindow和Ui_MainWindow）
+# 新增：导入QThread（用于线程管理）
+from PyQt6.QtCore import QThread, pyqtSignal
+
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+    # 新增：定义升级开始信号（传递配置参数字典给线程）
+    start_upgrade_signal = pyqtSignal(dict)  # 信号携带配置参数
+
     def __init__(self):
         super().__init__()
         self.setupUi(self)  # 初始化UI
@@ -33,33 +39,41 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_2.setMaximum(2048)
         # 修复：使用 lambda 传递额外参数（spinbox_type）
         # 修改：将 valueChanged 替换为 editingFinished 信号（输入完成后触发）
-        # spinBox 类型1（输入完成后保存）
+        # spinBox 测试轮次（输入完成后保存）
         self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
-        # spinBox_2 类型2（输入完成后保存）
+        # spinBox_2 升级包帧长度（输入完成后保存）
         self.spinBox_2.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_2.value(), 2))
         # 创建定时器（用于定时读取串口数据）
-        self.serial_timer = QtCore.QTimer(self)
-        self.serial_timer.timeout.connect(self.read_serial_data)  # 绑定定时读取方法
-        self.serial_timer.setInterval(100)  # 读取间隔：100ms（0.1秒）
+        # self.serial_timer = QtCore.QTimer(self)
+        # self.serial_timer.timeout.connect(self.read_serial_data)  # 绑定定时读取方法
+        # self.serial_timer.setInterval(100)  # 读取间隔：100ms（0.1秒）
 
         # 绑定菜单点击事件
         self.actionNULL1.triggered.connect(self.toggle_serial_port)
         self.actionNULL1.setText("打开串口")
         log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
 
-    # 新增：定时读取串口数据并显示到文本框
-    def read_serial_data(self):
-        """定时读取串口数据并写入plainTextEdit_3"""
-        if self.serial_open:  # 仅在串口打开时读取
-            try:
-                success, data = serial_if.read_data()  # 调用serial_bsp的读取方法
-                if success and data:  # 读取成功且数据非空
-                    # 生成带日期的完整时间戳（与log_wp格式统一，避免重复）
-                    current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                    log.write_to_plain_text_3(f"收到数据: {data}")
-                    print(data)
-            except Exception as e:
-                log.write_to_plain_text_3(f"读取数据异常: {str(e)}")
+        from upgrade_thread import UpgradeThread  # 导入线程类（修复缩进：与其他__init__内代码同级）
+        self.upgrade_thread = UpgradeThread()  # 实例化升级线程
+
+        # 连接主窗口信号到线程槽函数（传递配置参数）
+        self.start_upgrade_signal.connect(self.upgrade_thread.run_upgrade)
+
+        # 连接线程日志信号到主窗口日志显示（线程安全更新UI）
+        self.upgrade_thread.log_signal.connect(log.write_to_plain_text_3)
+
+    # def read_serial_data(self):
+    #     """定时读取串口数据并写入plainTextEdit_3"""
+    #     if self.serial_open:  # 仅在串口打开时读取
+    #         try:
+    #             success, data = serial_if.read_data()  # 调用serial_bsp的读取方法
+    #             if success and data:  # 读取成功且数据非空
+    #                 # 生成带日期的完整时间戳（与log_wp格式统一，避免重复）
+    #                 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    #                 log.write_to_plain_text_3(f"收到数据: {data}")
+    #                 print(data)
+    #         except Exception as e:
+    #             log.write_to_plain_text_3(f"读取数据异常: {str(e)}")
 
     # 重命名方法：处理打开/关闭串口切换逻辑
     def toggle_serial_port(self):
@@ -67,7 +81,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not self.serial_open:
             # 状态：关闭 → 打开串口（显示输入对话框）
             input_str, ok = QtWidgets.QInputDialog.getText(
-                self, "打开串口", "请输入串口参数（如COM1:9600）：",
+                self, "打开串口", "请输入串口参数（如COM3,9600,E,8,1）",
                 text=self.serial_input
             )
             if ok and input_str:
@@ -77,14 +91,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 success, msg = serial_if.open_serial(self.serial_input)
                 self.serial_open = success  # 更新状态为打开结果
                 if ok and self.serial_open:  # 串口打开成功
+                    config.serial_status = "打开"
                     self.actionNULL1.setText("关闭串口")  # 菜单名称改为“关闭串口”
                     log_wp(f"串口已打开，参数：{self.serial_input}")
                     config.serial_str = input_str
                     log.write_to_plain_text_3(f"串口已打开，参数：{self.serial_input}")
-                    self.serial_timer.start()  # 新增：启动定时器（开始读取数据）
+                    # self.serial_timer.start()  # 新增：启动定时器（开始读取数据）
                 else:
                     log_wp(f"串口打开失败，参数：{self.serial_input}，错误信息：{msg}")
                     self.serial_open = False  # 打开失败，重置状态
+                    config.serial_status = "关闭"
                     config.serial_str = f"{msg}"
                     self.actionNULL1.setText("打开串口")  # 菜单名称恢复为“打开串口”
                     # 添加 f 前缀，解析 {self.serial_input} 和 {msg}
@@ -94,14 +110,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             # 状态：打开 → 关闭串口（重置状态）
             self.serial_open = False  # 更新状态为关闭
-            self.actionNULL1.setText("打开串口")  # 菜单名称恢复为“打开串口”
+            config.serial_status = "关闭"
+            self.actionNULL1.setText("打开串口")
             log_wp(f"串口已关闭")
 
     # 合并文件1和文件2的选择逻辑（消除冗余）
     def select_file(self, file_type):
         """通用文件选择方法（支持file1/file2）"""
         # 根据文件类型配置参数（标题、标签、变量名）
-        config = {
+        self_file_config = {
             "file1": {
                 "dialog_title": "选择升级文件1",
                 "label_widget": self.label_2,  # 文件1对应label_2
@@ -118,48 +135,53 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             }
         }.get(file_type)
 
-        if not config:
+        if not self_file_config:
             log.write_to_plain_text_3(f"不支持的文件类型: {file_type}")
             return
 
         # 打开文件选择对话框（复用核心逻辑）
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, config["dialog_title"], "", "升级文件 (*.dat)"
+            self, self_file_config["dialog_title"], "", "升级文件 (*.dat)"
         )
         if file_path:
+            import config
             # 动态更新实例变量（文件路径和名称）
-            setattr(self, config["path_var"], file_path)  # 等价于 self.file1_path/file2_path = file_path
+            setattr(self, self_file_config["path_var"], file_path)  # 等价于 self.file1_path/file2_path = file_path
             file_name = os.path.basename(file_path)
-            setattr(self, config["name_var"], file_name)  # 等价于 self.file1_name/file2_name = file_name
+            setattr(self, self_file_config["name_var"], file_name)  # 等价于 self.file1_name/file2_name = file_name
 
             # 更新UI标签和提示
-            config["label_widget"].setText(f"{config['log_prefix']} 名称：{file_name}")
-            config["label_widget"].setToolTip(f"完整路径：{file_path}")
+            self_file_config["label_widget"].setText(f"{self_file_config['log_prefix']} 名称：{file_name}")
+            self_file_config["label_widget"].setToolTip(f"完整路径：{file_path}")
 
             # 记录日志
-            log.write_to_plain_text_3(f"已选择{config['log_prefix']}：{file_path}")
+            log.write_to_plain_text_3(f"已选择{self_file_config['log_prefix']}：{file_path}")
             if file_name:
                 # 新增：调用版本识别函数并区分文件类型
                 try:
                     # 获取版本信息元组（版本号、版本日期、内部版本号、内部版本日期）
                     version, version_date, internal_version, internal_date = get_file_version(file_path)
 
-                    # 格式化版本信息字符串
+                    # 格式化版本信息字符串（修复可能的非法字符）
                     info_str = (
-                        f"sv：{version}"
-                        f"date：{version_date}\n"
-                        f"isv：{internal_version}"
-                        f"idate：{internal_date}"
+                        f"sv：   {version}       "  
+                        f"date： {version_date} \n"
+                        f"isv：  {internal_version}       "
+                        f"idate： {internal_date}"
                     )
 
-                    # 根据文件类型显示到对应文本框
+                    # 新增：根据文件类型显示版本信息到对应文本框
                     if file_type == "file1":
+                        config.file1_path = file_path
+                        config.file1_version = info_str
                         self.plainTextEdit_2.setPlainText(info_str)  # 文件1 → plainTextEdit_2
                     elif file_type == "file2":
+                        config.file2_path = file_path
+                        config.file2_version = info_str
                         self.plainTextEdit.setPlainText(info_str)    # 文件2 → plainTextEdit
 
-                    # 日志文本框记录完整信息
-                    log.write_to_plain_text_3(f"{config['log_prefix']}版本信息：\n{info_str}")
+                    # 日志文本框记录完整信息（确保引号和标点为英文）
+                    log.write_to_plain_text_3(f"{self_file_config['log_prefix']}版本信息：\n{info_str}")
 
                     # 新增：检查两个文件版本信息是否完全相同
                     if self.file1_path and self.file2_path:  # 确保两个文件都已选择
@@ -179,10 +201,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                             log.write_to_plain_text_3(f"版本对比失败：{str(e)}")
 
                 except Exception as e:
-                    log.write_to_plain_text_3(f"{config['log_prefix']}版本识别失败：{str(e)}")
+                    log.write_to_plain_text_3(f"{self_file_config['log_prefix']}版本识别失败：{str(e)}")
                     QtWidgets.QMessageBox.critical(self, "版本识别失败", f"版本识别失败，错误信息：{str(e)}")
-
-
 
 # 新增：保存spinBox值到全局配置
     # 修复：移至类内部，添加 self 作为第一个参数
@@ -205,14 +225,41 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             print(f"save_spinbox_value异常: {str(e)}")  # 控制台输出辅助调试
 
     def upgrade_start(self):
-        print("升级开始")
+        # 获取配置检查结果（True 或错误字典）
+        config_result = config.config_val_check()
+
+        if config_result is True:
+            # 配置检查通过，继续升级流程
+            log_wp("配置值有效，开始升级")
+            config.print_config_value()
+            self.pushButtonupgrade.setText("停止升级")
+            upgrade_config = {
+                "file1_path": config.file1_path,       # 文件1路径
+                "file2_path": config.file2_path,       # 文件2路径
+                "frame_length": config.spin_box_2_value,  # 升级包帧长度
+                "serial_str": config.serial_str,       # 串口参数
+                "test_rounds": config.spin_box_value    # 测试轮次
+            }
+            # 此处添加升级逻辑（如发送升级指令、文件传输等）
+            self.start_upgrade_signal.emit(upgrade_config)
+        else:
+            # 配置检查失败，提取错误项并弹窗提示
+            error_items = ", ".join(config_result.keys())  # 拼接所有错误配置项名称
+            error_msg = f"配置错误：以下项未设置或无效：\n{error_items}"
+
+            # 弹窗显示错误信息
+            QtWidgets.QMessageBox.critical(self, "配置检查失败", error_msg)
+            # 日志记录错误
+            log_wp(error_msg)
+            # 终止升级流程
+            return
 
 # 保留唯一主程序入口
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = MainWindow()  # 实例化自定义窗口类
     MainWindow.show()
+    # 修复：正确调用 QApplication 的 exec() 方法
     sys.exit(app.exec())
-
 
 
