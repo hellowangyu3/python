@@ -142,7 +142,7 @@
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>250</y>
+      <y>260</y>
       <width>251</width>
       <height>21</height>
      </rect>
@@ -155,9 +155,9 @@
     <property name="geometry">
      <rect>
       <x>340</x>
-      <y>240</y>
+      <y>260</y>
       <width>241</width>
-      <height>31</height>
+      <height>41</height>
      </rect>
     </property>
     <property name="plainText">
@@ -170,7 +170,7 @@
       <x>340</x>
       <y>200</y>
       <width>241</width>
-      <height>31</height>
+      <height>41</height>
      </rect>
     </property>
     <property name="plainText">
@@ -250,7 +250,7 @@
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionNULL1">
    <property name="text">
-    <string>NULL1</string>
+    <string>打开串口</string>
    </property>
   </action>
  </widget>

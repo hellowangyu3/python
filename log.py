@@ -5,7 +5,7 @@ import time
 
 
 # 定义日志写入函数（每次调用生成当前时间戳）
-def LOG_WP(log):
+def log_wp(log):
     log_file = open('.venv/log.txt', 'a', encoding='utf-8')
     # 获取当前时间并格式化为字符串（例如：2024-05-20 15:30:45）
     current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
