@@ -9,6 +9,7 @@ import log
 from serial_bsp import SerialInterface
 from Upgrade_file_opt import get_file_version  # 新增：导入get_file_version方法
 import config
+from serial_thread import SerialThread
 
 log_wp = log.log_wp
 serial_if = SerialInterface()
@@ -35,10 +36,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_ile1.clicked.connect(lambda: self.select_file("file1"))
         self.pushButton_feil2.clicked.connect(lambda: self.select_file("file2"))
         self.pushButtonupgrade.clicked.connect(self.upgrade_start)
+        # 新增：创建串口线程实例（传入已有的serial_if）
+
+        self.serial_thread = SerialThread(serial_if)
+        # 绑定线程数据信号到UI更新（接收数据后写入日志）
+        self.serial_thread.data_received.connect(log.write_to_plain_text_3)
+
 
         self.spinBox_2.setMaximum(2048)
-        # 修复：使用 lambda 传递额外参数（spinbox_type）
-        # 修改：将 valueChanged 替换为 editingFinished 信号（输入完成后触发）
+
         # spinBox 测试轮次（输入完成后保存）
         self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
         # spinBox_2 升级包帧长度（输入完成后保存）
@@ -61,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # 连接线程日志信号到主窗口日志显示（线程安全更新UI）
         self.upgrade_thread.log_signal.connect(log.write_to_plain_text_3)
+        self.serial_thread.start_thread()  # 启动串口线程
 
     # def read_serial_data(self):
     #     """定时读取串口数据并写入plainTextEdit_3"""
@@ -97,21 +104,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     config.serial_str = input_str
                     log.write_to_plain_text_3(f"串口已打开，参数：{self.serial_input}")
                     # self.serial_timer.start()  # 新增：启动定时器（开始读取数据）
+                    # 屏蔽串口线程：注释启动调用
                 else:
                     log_wp(f"串口打开失败，参数：{self.serial_input}，错误信息：{msg}")
                     self.serial_open = False  # 打开失败，重置状态
                     config.serial_status = "关闭"
                     config.serial_str = f"{msg}"
-                    self.actionNULL1.setText("打开串口")  # 菜单名称恢复为“打开串口”
-                    # 添加 f 前缀，解析 {self.serial_input} 和 {msg}
+                    self.actionNULL1.setText("打开串口")
                     log.write_to_plain_text_3(f"串口打开失败，参数：{self.serial_input}，错误信息：{msg}")
-                    #添加弹窗打开失败
                     QtWidgets.QMessageBox.critical(self, "打开串口失败", f"串口打开失败，错误信息：{msg}")
         else:
-            # 状态：打开 → 关闭串口（重置状态）
-            self.serial_open = False  # 更新状态为关闭
-            config.serial_status = "关闭"
+            # 状态：打开 → 关闭串口（修复卡死问题）
+            self.serial_open = False  # 立即更新状态
             self.actionNULL1.setText("打开串口")
+
+            # 关键修复：确保关闭串口时不阻塞主线程
+            try:
+                # 假设serial_if.close_serial()可能阻塞，使用线程执行
+                import threading
+                close_thread = threading.Thread(target=serial_if.close_serial)
+                close_thread.daemon = True  # 设置为守护线程，确保能被强制终止
+                close_thread.start()
+                close_thread.join(timeout=0.5)  # 最多等待0.5秒
+            except Exception as e:
+                log.write_to_plain_text_3(f"关闭串口异常: {str(e)}")
+
             log_wp(f"串口已关闭")
 
     # 合并文件1和文件2的选择逻辑（消除冗余）
@@ -232,16 +249,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # 配置检查通过，继续升级流程
             log_wp("配置值有效，开始升级")
             config.print_config_value()
-            self.pushButtonupgrade.setText("停止升级")
             upgrade_config = {
                 "file1_path": config.file1_path,       # 文件1路径
                 "file2_path": config.file2_path,       # 文件2路径
                 "frame_length": config.spin_box_2_value,  # 升级包帧长度
                 "serial_str": config.serial_str,       # 串口参数
-                "test_rounds": config.spin_box_value    # 测试轮次
+                "test_rounds": config.spin_box_value,    # 测试轮次
+                "upgrade_status":self.pushButtonupgrade.text()  #线程状态
             }
             # 此处添加升级逻辑（如发送升级指令、文件传输等）
             self.start_upgrade_signal.emit(upgrade_config)
+            if self.pushButtonupgrade.text() == "停止升级":
+                self.pushButtonupgrade.setText("开始升级")
+            else:
+                self.pushButtonupgrade.setText("停止升级")
         else:
             # 配置检查失败，提取错误项并弹窗提示
             error_items = ", ".join(config_result.keys())  # 拼接所有错误配置项名称
@@ -259,7 +280,5 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = MainWindow()  # 实例化自定义窗口类
     MainWindow.show()
-    # 修复：正确调用 QApplication 的 exec() 方法
     sys.exit(app.exec())
-
 

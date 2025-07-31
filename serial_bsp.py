@@ -113,12 +113,6 @@ class SerialInterface:
             return False, f"发送失败: {str(e)}"
 
     def read_data(self, max_bytes=1024, is_hex=True):  # 修改：默认is_hex=True
-        """
-        读取数据
-        max_bytes: 最大读取字节数
-        is_hex: 是否以十六进制返回（True=Hex格式，False=文本格式，默认True）
-        返回: (成功标志, 数据/消息)
-        """
         if not self.is_open:
             print("串口未打开")
             return False, "串口未打开"

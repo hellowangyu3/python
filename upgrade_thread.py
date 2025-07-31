@@ -14,6 +14,9 @@ class UpgradeThread(QThread):
     def run_upgrade(self, config):
         """执行升级逻辑（通过主窗口信号触发）"""
         self.is_running = True
+        if config["upgrade_status"] == "停止升级":
+            self.log_signal.emit("停止升级。。。代码还没写呢这一块")
+            return True
         self.log_signal.emit("升级线程启动，开始执行升级...")
 
         try:
