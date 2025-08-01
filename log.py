@@ -28,7 +28,6 @@ def set_plain_text_edit_3(widget):
 def write_to_plain_text_3(text):
     """往 plainTextEdit_3 文本框中追加内容"""
     if _plain_text_edit_3 is not None:
-        # 使用 appendPlainText 方法追加文本（自动换行）
         current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         _plain_text_edit_3.appendPlainText(f"[{current_time}] {text}")
         # 滚动到底部，确保最新内容可见

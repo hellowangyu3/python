@@ -1,0 +1,63 @@
+1. gw13762_dt_to_fn(dt1: int, dt2: int) -> int
+作用：将DT1和DT2转换为FN码
+入参：
+dt1: int：DT1值（1/2/4/8/16/32/64/128）
+dt2: int：DT2值
+出参：int - 转换后的FN码
+
+
+2. gw13762_fn_to_dt(fn: int) -> Tuple[int, int]
+作用：将FN码转换为DT1和DT2
+入参：fn: int - FN功能码
+出参：Tuple[int, int] - (DT1值, DT2值)
+
+
+3. gw13762_check(p_affair, dir: int) -> Tuple[bool, int]
+作用：GW13762协议帧校验（带调试信息）
+入参：
+p_affair：事务对象（SApsAffair实例）
+dir: int：预期传输方向（0:下行, 1:上行）
+出参：Tuple[bool, int] - (校验结果, 错误码)
+错误码：0xFF成功，0x02长度错误，0x03校验错误，0x05格式错误
+
+
+4. gw13762_build_frame(...) -> Tuple[list, int]
+作用：构建GW13762协议帧
+入参：
+必选：dir: int（方向）、prm: int（启动标志）、mode: int（通信方式）、afn: int（AFN功能码）、fn: int（FN功能码）、serial_num: int（帧序号）
+可选：module_id=0（模块标识）、relay_lev=0（中继级别）、src_addr=None（源地址）、dst_addr=None（目的地址）、relay_addrs=None（中继地址）、data=None（数据域）
+出参：Tuple[list, int] - (构建的帧数据列表, 错误码)
+
+
+5. create_default_frame(afn: int, fn: int, serial_num: int, data: list) -> Tuple[list, int]
+作用：简化构帧调用（默认参数：下行/从动站/主节点/无中继）
+入参：
+afn: int：AFN功能码
+fn: int：FN功能码
+serial_num: int：帧序号（1字节）
+data: list：数据域列表
+出参：Tuple[list, int] - (构建的帧数据列表, 错误码)
+
+
+6. wwgw13762_check()
+作用：测试构帧与校验的兼容性（内部调用gw13762_build_frame和gw13762_check）
+入参：无
+出参：无（打印构帧结果和校验结果）
+
+
+7. www_custom_frame_check()
+作用：测试自定义帧的校验逻辑
+入参：无
+出参：无（打印校验结果和解析信息）
+
+
+8. parse_and_print_frame(frame_data: list, expected_dir: int = 1)
+作用：解析并打印帧数据的详细结构（帧头/控制域/信息域/地址域等）
+入参：
+frame_data: list：待解析的帧数据列表
+expected_dir: int：预期方向（默认1：上行）
+出参：无（打印帧结构详细信息）
+说明
+带->的为返回值类型，Tuple[...]表示元组类型
+入参中None为默认值（如src_addr=None），调用时可省略
+错误码定义参考ErrorCode枚举（FN_ACK_FFH=0xFF成功，其他为失败码）

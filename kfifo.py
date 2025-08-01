@@ -1,8 +1,11 @@
+from log import log_wp
+
+
 class KFifoAps:
     """环形队列实现，对应C语言中的kfifo_aps"""
 
     # 环形缓冲大小，对应C中的FIFO_QUEUE_LEN
-    FIFO_QUEUE_LEN = 32 * 256  # 8192
+    FIFO_QUEUE_LEN = 32 * 256 * 2
 
     def __init__(self, buffer_size=None):
         """初始化环形队列"""
@@ -20,13 +23,29 @@ class KFifoAps:
     def put(self, data):
         """
         向kfifo中添加数据，对应kfifo_aps_put
-        data: 要添加的字节数据（可迭代对象）
+        data: 要添加的字节数据（bytes或整数列表，元素0-255）
         返回实际添加的数据长度
         """
+        # 修复1：检查数据类型（仅允许bytes或整数列表）
+        if not isinstance(data, (bytes, list)):
+            log_wp(f"put错误：不支持的数据类型 {type(data)}，仅允许bytes或整数列表")
+            return 0
+
+        # 修复2：若为bytes类型，转换为整数列表（与缓冲区存储格式统一）
+        if isinstance(data, bytes):
+            data = list(data)  # bytes → [0x01, 0x02, ...]（整数列表）
+
+        # 修复3：检查列表元素是否为有效字节值（0-255的整数）
+        if isinstance(data, list):
+            for i, byte in enumerate(data):
+                if not isinstance(byte, int) or byte < 0 or byte > 255:
+                    print(f"put错误：列表元素 {i} 不是有效字节值（{byte}）")
+                    return 0
+
         if not data:
             return 0
 
-        # 计算可以添加的数据长度
+        # 原有逻辑：计算可添加长度（保持不变）
         if self.length > self.FIFO_QUEUE_LEN:
             self.length = self.FIFO_QUEUE_LEN
             return 0
@@ -40,7 +59,7 @@ class KFifoAps:
         if add_len <= 0:
             return 0
 
-        # 复制数据到缓冲区
+        # 复制数据到缓冲区（此时data已确保为整数列表，可安全赋值）
         start = self.length
         self.buffer[start:start + add_len] = data[:add_len]
         self.length += add_len
@@ -123,15 +142,15 @@ if __name__ == "__main__":
     fifo = KFifoAps()
 
     # 添加数据
-    data = [0x01, 0x02, 0x03, 0x04, 0x05]
+    data = [0x01, 0x12, 0x03, 0x14, 0x05]
     added = fifo.put(data)
     print(f"添加了 {added} 字节数据")
     print(f"当前队列长度: {fifo.get_data_length()}")
 
-    # 读取数据（不删除）
-    read_data = fifo.read(3)
-    print(f"读取到的数据: {[hex(x) for x in read_data]}")
-    print(f"读取后队列长度: {fifo.get_data_length()}")
+    # # 读取数据（不删除）
+    # read_data = fifo.read(3)
+    # print(f"读取到的数据: {[hex(x) for x in read_data]}")
+    # print(f"读取后队列长度: {fifo.get_data_length()}")
 
     # 获取数据（删除）
     get_data = fifo.get(3)
@@ -139,7 +158,7 @@ if __name__ == "__main__":
     print(f"获取后队列长度: {fifo.get_data_length()}")
 
     # 再添加一些数据
-    data2 = [0x06, 0x07, 0x08]
+    data2 = "whudwhduw"
     fifo.put(data2)
     print(f"添加后队列长度: {fifo.get_data_length()}")
     print(f"队列内容: {fifo}")

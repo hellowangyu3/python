@@ -112,7 +112,7 @@ class SerialInterface:
         except Exception as e:
             return False, f"发送失败: {str(e)}"
 
-    def read_data(self, max_bytes=1024, is_hex=True):  # 修改：默认is_hex=True
+    def read_data(self, max_bytes=2048, is_hex=True):  # 修改：默认is_hex=True
         if not self.is_open:
             print("串口未打开")
             return False, "串口未打开"
@@ -120,14 +120,14 @@ class SerialInterface:
         try:
             data = self.ser.read(max_bytes)
             if not data:
-                return True, ""  # 无数据但读取成功
-
-            if is_hex:
-                # 转换为十六进制字符串
-                return True, ' '.join(f'{b:02X}' for b in data)
-            else:
-                # 尝试解码为字符串
-                return True, data.decode('utf-8', errors='replace')
+                return False, ""  # 无数据但读取成功
+            return True, data
+            # if is_hex:
+            #     # 转换为十六进制字符串
+            #     return True, ' '.join(f'{b:02X}' for b in data)
+            # else:
+            #     # 尝试解码为字符串
+            #     return True, data.decode('utf-8', errors='replace')
         except Exception as e:
             print("读取失败")
             return False, f"读取失败: {str(e)}"
