@@ -21,12 +21,19 @@ class SerialThread(QThread):
             if self.serial_if.is_open:
                 success, data = self.serial_if.read_data(1024)
                 if success and data:
-                    print(f"接收数据{data}")
-                    serial_fifo.put(data)
-                    data_with_prefix = f"[收]{data}"
-                    # fifo_data = serial_fifo.get(serial_fifo.get_data_length())
-                    # print(f"获取到的数据: {[hex(x) for x in fifo_data]}")
+                    hex_data = ' '.join(f"{b:02X}" for b in data)  # 新增：字节转十六进制
+                    data_with_prefix = f"[uart]{hex_data}"  # 修改：使用十六进制数据
+                    # [收]68 2C 00 03 04 00 00 00 00 0C 55 55 55 55 55 55 01 00 02 00 00 66 14 04 00 10 68 01 00 02
+                    # 00 00 66 68 11 04 34 34 39 38 27 16 06 16[收]68 2C 00 03 04 00 00 00 00 0C 55 55 55 55 55 55 01 00 02 00 00 66 14 04 00 10 68 01 00 02 00 00 66 68 11 04 34 34 39 38 27 16 06 16
                     self.data_received.emit(data_with_prefix)
+                    print(data_with_prefix)
+                    log.log_info(log.LOG_DEBUG_CMD, data_with_prefix)
+                    serial_fifo.put(data)
+                    # fifo_data = serial_fifo.get(serial_fifo.get_data_length())
+                    # print(f"获取到的数据: {fifo_data}")
+                    # 获取到的数据: [104, 44, 0, 3, 4, 0, 0, 0, 0, 12, 85, 85, 85, 85, 85, 85, 1, 0, 2, 0, 0, 102, 20, 4,
+                    #                0, 16, 104, 1, 0, 2, 0, 0, 102, 104, 17, 4, 52, 52, 57, 56, 39, 22, 6, 22]
+
             time.sleep(0.01)
 
     def start_thread(self):

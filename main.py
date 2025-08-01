@@ -43,24 +43,27 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButtonupgrade.clicked.connect(self.upgrade_start)
 
         # 初始化串口线程
-        self.serial_thread = SerialThread(serial_if)
+        self.serial_thread = SerialThread(serial_if)    #把bsp的串口传给线程，让它去循环的读取数据
         self.serial_thread.data_received.connect(log.write_to_plain_text_3)
         self.serial_thread.start_thread()  # 启动串口线程
 
+        # 绑定菜单事件
+        self.actionNULL1.triggered.connect(self.toggle_serial_port)
+        self.actionNULL1.setText("打开串口")
+        log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
+
         # 初始化解析线程
         self.parse_thread = ParsingThread()
-        # self.parse_thread.data_received.connect(log.write_to_plain_text_3)
-        # self.parse_thread.start_thread()  # 启动解析线程
+        # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
+        self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
+        self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
 
         # 配置SpinBox
         self.spinBox_2.setMaximum(2048)
         self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
         self.spinBox_2.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_2.value(), 2))
 
-        # 绑定菜单事件
-        self.actionNULL1.triggered.connect(self.toggle_serial_port)
-        self.actionNULL1.setText("打开串口")
-        log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
+
 
         # 初始化升级线程
         from upgrade_thread import UpgradeThread
