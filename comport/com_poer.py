@@ -39,16 +39,13 @@ class ParsingThread(QThread):
                 if fifolen > 0:
                     frame_data = serial_fifo.get(fifolen)
                 else:
-                    time.sleep(0.1)
+                    time.sleep(0.01)
                     continue
 
                 # self.data_received.emit(data)
                 print(f"comport recv{frame_data}")
-                # 2. 调用13762协议解析函数（伪代码）
-                # 假设使用之前定义的gw13762_check函数进行解
                 frame = affair.p_src.local
                 frame.datalen = len(frame_data)
-
 
                 # 1. 查找帧头0x68的位置
                 for i in range(len(frame_data)):

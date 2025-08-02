@@ -3,8 +3,8 @@
 # from PyQt6.QtWidgets.QWidget import update
 # from Tools.scripts.generate_token import update_file  # 若无需此导入也可删除
 from log import log_wp
-spin_box_value = 0  # 测试轮次 保存spinBox的值 
-spin_box_2_value = 0  # 升级包帧长度：保存spinBox_2的值（如需）
+test_count = 0  # 测试轮次 保存spinBox的值
+len_upgrade_frame = 0  # 升级包帧长度：保存spinBox_2的值（如需）
 #串口参数保存
 serial_str = ""  # 串口名称
 serial_status = "关闭"  # 串口状态
@@ -13,9 +13,15 @@ file1_version = ""  # 存储文件1名称
 file2_path = ""  # 存储文件2路径
 file2_version = ""  # 存储文件2名称
 
+#升级进度-文件包大小
+file1_size = 0
+file2_size = 0
+current_frame = 0
+current_data = b""
+
 def print_config_value():
-    log_wp(f"spin_box_value: {spin_box_value}")
-    log_wp(f"spin_box_2_value: {spin_box_2_value}")
+    log_wp(f"test_count: {test_count}")
+    log_wp(f"len_upgrade_frame: {len_upgrade_frame}")
     log_wp(f"serial_str: {serial_str}")
     log_wp(f"serial_status: {serial_status}")
     log_wp(f"file1_path: {file1_path}")
@@ -28,7 +34,7 @@ def config_val_check():
     errors = {}  # 收集所有无效配置项
 
     # 检查所有配置项，收集所有错误（而非遇到第一个错误就返回）
-    if spin_box_value == 0:
+    if test_count == 0:
         errors["测试轮次"] = False
     if serial_status == "关闭":
         errors["串口未打开"] = False

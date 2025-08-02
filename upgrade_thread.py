@@ -1,7 +1,13 @@
+#这个文件在所有配置项都配置完成后，收到开始升级按键，开始升级
+# 循环的往upgrade_fifo队列中发送数据，等待upgrade_fifo中数据为空-即被其他线程读完了
+#升级完成后调用自身函数3，将数据更新-进行版本比对，
+
+
 from PyQt6.QtCore import QThread, pyqtSlot, pyqtSignal
 import serial_bsp
 import log
-
+from kfifo import KFifoAps
+upgrade_fifo = KFifoAps()
 class UpgradeThread(QThread):
     """升级线程：接收配置参数并执行升级逻辑，通过信号返回日志"""
     log_signal = pyqtSignal(str)  # 发送日志信息给主窗口
@@ -9,35 +15,25 @@ class UpgradeThread(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.is_running = False  # 线程运行状态标志
+        self.upgrade_path = None
+        self.upgrade_total = 0
 
     @pyqtSlot(dict)  # 接收主窗口发送的配置参数
     def run_upgrade(self, config):
         """执行升级逻辑（通过主窗口信号触发）"""
         self.is_running = True
-        if config["upgrade_status"] == "停止升级":
-            self.log_signal.emit("停止升级。。。代码还没写呢这一块")
-            return True
         self.log_signal.emit("升级线程启动，开始执行升级...")
+        print("代码还没写，先打印一下配置参数")
+        print(config)
+        return True
 
-        try:
-            # 1. 解析配置参数（从主窗口信号传递的字典中提取）
-            file1_path = config["file1_path"]
-            frame_length = config["frame_length"]
-            # ... 其他参数解析 ...
+    # def read_upgrade_file(self,num_of_bytes):
+    #
+    #     try:
+    #         with open(file_path, "rb") as f:
+    #             self.firmware_data = f.read()
+    #         self.log_signal.emit(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
 
-            # 2. 执行升级步骤（示例：读取文件、分帧发送等）
-            if not self._read_upgrade_file(file1_path):
-                return
-
-            # 3. 通过串口发送升级数据（调用serial_bsp）
-            self._send_firmware_data(frame_length)
-
-            self.log_signal.emit("升级完成！")
-
-        except Exception as e:
-            self.log_signal.emit(f"升级线程异常: {str(e)}")
-        finally:
-            self.is_running = False
 
     def _read_upgrade_file(self, file_path):
         """读取升级文件内容（内部辅助方法）"""
@@ -45,7 +41,19 @@ class UpgradeThread(QThread):
             with open(file_path, "rb") as f:
                 self.firmware_data = f.read()
             self.log_signal.emit(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
+            # 按128字节分割数据并打印
+
+            output_path = "./firmware_output.txt"
+            with open(output_path, "w") as out_f:
+                for i in range(0, len(self.firmware_data), 128):
+                    # 截取128字节数据并转换为十六进制字符串
+                    chunk = self.firmware_data[i:i + 128]
+                    hex_line = ' '.join(f'{byte:02x}' for byte in chunk)
+                    out_f.write(hex_line + '\n')
+            self.log_signal.emit(f"数据已成功写入文件：{output_path}，共{len(self.firmware_data) // 128 + 1}行")
+
             return True
+
         except Exception as e:
             self.log_signal.emit(f"读取升级文件失败: {str(e)}")
             return False

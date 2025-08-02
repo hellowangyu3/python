@@ -22,6 +22,7 @@ serial_if = SerialInterface()
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     # 定义升级开始信号（传递配置参数字典给线程）
     start_upgrade_signal = pyqtSignal(dict)
+    stop_upgrade_signal = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
@@ -47,12 +48,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.serial_thread.data_received.connect(log.write_to_plain_text_3)
         self.serial_thread.start_thread()  # 启动串口线程
 
+
+
         # 绑定菜单事件
         self.actionNULL1.triggered.connect(self.toggle_serial_port)
         self.actionNULL1.setText("打开串口")
         log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
 
         # 初始化解析线程
+        self.parse_thread = ParsingThread()
+        # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
+        self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
+        self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
+
+        # 初始化处理响应函数
         self.parse_thread = ParsingThread()
         # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
         self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
@@ -69,6 +78,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         from upgrade_thread import UpgradeThread
         self.upgrade_thread = UpgradeThread()
         self.start_upgrade_signal.connect(self.upgrade_thread.run_upgrade)
+        self.stop_upgrade_signal.connect(self.upgrade_thread.stop_upgrade)
         self.upgrade_thread.log_signal.connect(log.write_to_plain_text_3)
 
     def toggle_serial_port(self):
@@ -195,17 +205,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     log.write_to_plain_text_3(f"{self_file_config['log_prefix']}版本识别失败：{str(e)}")
                     QtWidgets.QMessageBox.critical(self, "版本识别失败", f"版本识别失败，错误信息：{str(e)}")
 
-    def save_spinbox_value(self, value, spinbox_type):
+    @staticmethod
+    def save_spinbox_value(value, spinbox_type):
         """将spinBox当前值保存到全局配置"""
         try:
             if spinbox_type == 1:
-                config.spin_box_value = value
+                config.tests_count = value
             elif spinbox_type == 2:
-                config.spin_box_2_value = value
+                config.len_upgrade_frame = value
             else:
                 log.write_to_plain_text_3(f"ERR:不支持的spinBox类型: {spinbox_type}")
                 return
-
             log_wp(f"已保存spinBox{spinbox_type}值：{value}")
         except Exception as e:
             log.write_to_plain_text_3(f"保存spinBox值失败: {str(e)}")
@@ -226,18 +236,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 "file2_path": config.file2_path,
                 "frame_length": config.spin_box_2_value,
                 "serial_str": config.serial_str,
-                "test_rounds": config.spin_box_value,
+                "test_rounds": config.test_count,
                 "upgrade_status": self.pushButtonupgrade.text()
             }
-
-            # 发送升级信号
-            self.start_upgrade_signal.emit(upgrade_config)
-
             # 切换按钮文本
             if self.pushButtonupgrade.text() == "停止升级":
                 self.pushButtonupgrade.setText("开始升级")
+                # 发送升级信号
+                self.start_upgrade_signal.emit(upgrade_config)
             else:
                 self.pushButtonupgrade.setText("停止升级")
+                # 发送升级信号
+                self.stop_upgrade_signal.emit(upgrade_config)
         else:
             # 配置无效，显示错误信息
             error_items = ", ".join(config_result.keys())
