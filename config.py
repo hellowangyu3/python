@@ -18,6 +18,7 @@ file1_size = 0
 file2_size = 0
 current_frame = 0
 current_data = b""
+# 升级方式 递增
 
 def print_config_value():
     log_wp(f"test_count: {test_count}")

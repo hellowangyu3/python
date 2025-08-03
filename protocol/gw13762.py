@@ -1,6 +1,7 @@
 import ctypes
 from enum import IntEnum
 from typing import Tuple
+import log
 
 # 常量定义
 LOCAL_ADDR_LEN = 6
@@ -126,6 +127,59 @@ def gw13762_fn_to_dt(fn: int) -> Tuple[int, int]:
     dt1_rev_map = {v: k for k, v in dt1_map.items()}
 
     return dt1_rev_map.get(dt1_val, 0), dt2
+
+
+
+# 功能分发函数，根据AFN和FN调用不同处理函数
+def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
+    """
+    根据AFN和FN分发到不同的处理函数
+    """
+    def handle_afn_03_fn_04(afn, fn, serial_num, frame_data):
+        print(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        # 这里写具体处理逻辑
+        # ...
+    def handle_afn_03_fn_0A(afn, fn, serial_num, frame_data):
+        print(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        log.write_to_plain_text_3(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        # 这里写具体处理逻辑
+        # ...
+    def handle_default(afn, fn, serial_num, frame_data):
+        print(f"未定义处理函数: AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}")
+
+    # 分发表，可扩展
+    dispatch_table = {
+        (0x03, 0x04): handle_afn_03_fn_04,
+        (0x03, 0x0A): handle_afn_03_fn_0A,
+        # (afn, fn): func
+    }
+    func = dispatch_table.get((afn, fn), handle_default)
+    func(afn, fn, serial_num, frame_data)
+
+
+# 钩针函数：根据不同AFN与FN钩帧，输入帧序号、数据内容、AFN与FN作为参数
+def hook_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
+    """
+    钩针函数：根据不同AFN与FN钩帧，输入帧序号、数据内容、AFN与FN作为参数
+    """
+    # 示例：可根据afn和fn做不同钩子处理
+    if (afn, fn) == (0x03, 0x04):
+        print(f"[HOOK] 钩到AFN=0x03, FN=0x04, 序号={serial_num}, 数据={frame_data}")
+        # 用户自定义处理...
+    elif (afn, fn) == (0x03, 0x0A):
+        print(f"[HOOK] 钩到AFN=0x03, FN=0x0A, 序号={serial_num}, 数据={frame_data}")
+        # 用户自定义处理...
+    else:
+        print(f"[HOOK] 未定义钩子: AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}")
+
+
+
+
+
+
+
+
+
 
 
 def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
@@ -279,8 +333,17 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
                 pos = 6 + LOCAL_ADDR_LEN * 2 + relaylen + 3 + i
                 if pos < len(tmp_buf):
                     p_rx.contents.buff[i] = tmp_buf[pos]
+    
 
-    return True, ErrorCode.FN_ACK_FFH
+    # 解析成功，先返回True，再分发功能处理
+    result = True
+    errcode = ErrorCode.FN_ACK_FFH
+    if result:
+        rx_frame = plocal_src.contents.frame
+        serial_num = rx_frame.info.buff[5] if hasattr(rx_frame.info, 'buff') else 0
+        frame_data = [plocal_src.contents.data[i] for i in range(plocal_src.contents.datalen)]
+        dispatch_by_afn_fn(rx_frame.afn, rx_frame.fn, serial_num, frame_data)
+    return result, errcode
 
 
 def gw13762_build_frame(
@@ -409,21 +472,6 @@ def gw13762_build_frame(
 
 
 def create_default_frame(afn: int, fn: int, serial_num: int, data: list) -> Tuple[list, int]:
-    """
-    创建默认参数的GW13762协议帧（简化调用）
-
-    参数:
-        afn: AFN功能码（必填）
-        fn: FN功能码（必填）
-        serial_num: 帧序号（必填，1字节）
-        data: 数据域列表（必填）
-
-    默认参数:
-        dir=1 (下行), prm=0 (从动站), module_id=0 (主节点), relay_lev=0 (无中继), mode=0x03 (宽带载波)
-
-    返回:
-        (构建的帧数据列表, 错误码)
-    """
     return gw13762_build_frame(
         dir=1,  # 默认：下行
         prm=0,  # 默认：从动站
@@ -539,17 +587,15 @@ def parse_and_print_frame(frame_data: list, expected_dir: int = 1):
     # 获取解析后的帧
     rx_frame = frame.frame
 
-    # 打印帧的每个成员
+    # 打印帧的每个成员（原有功能保留）
     print("\n=== 帧结构详细信息 ===")
     print(f"帧头 (header): 0x{rx_frame.header:02X}")
     print(f"长度 (length): {rx_frame.length} (0x{rx_frame.length:04X})")
-
     print("\n控制域 (ctrl):")
     print(f"  控制字节: 0x{rx_frame.ctrl.ctrl:02X}")
     print(f"  传输方向 (dir): {rx_frame.ctrl.bit.dir} ({'上行' if rx_frame.ctrl.bit.dir == 1 else '下行'})")
     print(f"  启动标志 (prm): {rx_frame.ctrl.bit.prm}")
     print(f"  通信方式 (mode): 0x{rx_frame.ctrl.bit.mode:02X}")
-
     print("\n信息域 (info):")
     print(f"  模块标识 (module_id): {rx_frame.info.down.module_id}")
     print(f"  中继级别 (relay_lev): {rx_frame.info.down.relay_lev}")
@@ -558,36 +604,36 @@ def parse_and_print_frame(frame_data: list, expected_dir: int = 1):
     print(f"  冲突检测 (clash_check): {rx_frame.info.down.clash_check}")
     print(f"  缓冲区 (buff): {[hex(b) for b in rx_frame.info.buff]}")
     print(f"  帧序号 (serial_num): 0x{rx_frame.info.buff[0]:02X}")
-
     print("\n地址域 (addr):")
     print(f"  源地址 (src): {[hex(b) for b in rx_frame.addr.src]}")
     print(f"  目的地址 (dst): {[hex(b) for b in rx_frame.addr.dst]}")
     print(f"  中继地址 (relay): {[hex(b) for b in rx_frame.addr.relay if b != 0]}")  # 只显示非零值
-
     print("\n功能码域:")
     print(f"  AFN: 0x{rx_frame.afn:02X}")
     print(f"  FN: 0x{rx_frame.fn:02X}")
     dt1, dt2 = gw13762_fn_to_dt(rx_frame.fn)
     print(f"  DT1: 0x{dt1:02X}, DT2: 0x{dt2:02X}")
-
     print("\n数据域:")
     print(f"  数据长度 (bufflen): {rx_frame.bufflen}")
     print(f"  数据内容 (buff): {[hex(rx_frame.buff[i]) for i in range(rx_frame.bufflen)]}")
-
     print("\n校验与帧尾:")
     print(f"  校验和 (cs): 0x{rx_frame.cs:02X}")
     print(f"  帧尾 (end_char): 0x{rx_frame.end_char:02X}")
 
+    # 新增：分发功能处理
+    serial_num = rx_frame.info.buff[5] if hasattr(rx_frame.info, 'buff') else 0
+    dispatch_by_afn_fn(rx_frame.afn, rx_frame.fn, serial_num, list(frame_data))
 
-# def main():
-#     frame_hex_str = "68 38 00 C3 00 00 40 00 00 01 03 02 01 F2 37 08 01 00 00 3C 14 00 4F 04 00 04 0C 51 81 01 00 00 10 80 04 02 00 10 10 13 10 10 13 43 46 38 46 22 11 24 01 24 64 80 25 16"
-#
-#     # 转换为整数列表
-#     frame_data = [int(hex_str, 16) for hex_str in frame_hex_str.split()]
-#
-#     print(f"待解析帧数据长度: {len(frame_data)} 字节")
-#     parse_and_print_frame(frame_data)
-#
-#
-# if __name__ == "__main__":
-#     main()
+
+def main():
+    frame_hex_str = "68 38 00 C3 00 00 40 00 00 01 03 02 01 F2 37 08 01 00 00 3C 14 00 4F 04 00 04 0C 51 81 01 00 00 10 80 04 02 00 10 10 13 10 10 13 43 46 38 46 22 11 24 01 24 64 80 25 16"
+
+    # 转换为整数列表
+    frame_data = [int(hex_str, 16) for hex_str in frame_hex_str.split()]
+
+    print(f"待解析帧数据长度: {len(frame_data)} 字节")
+    parse_and_print_frame(frame_data)
+
+
+if __name__ == "__main__":
+    main()

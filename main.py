@@ -61,11 +61,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
         self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
 
-        # 初始化处理响应函数
-        self.parse_thread = ParsingThread()
-        # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
-        self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
-        self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
+        # # 初始化处理响应函数
+        # self.parse_thread = ParsingThread()
+        # # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
+        # self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
+        # self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
 
         # 配置SpinBox
         self.spinBox_2.setMaximum(2048)
