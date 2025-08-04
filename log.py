@@ -63,3 +63,5 @@ def write_to_plain_text_3(text):
         _plain_text_edit_3.verticalScrollBar().setValue(
             _plain_text_edit_3.verticalScrollBar().maximum()
         )
+    else:
+        print(f"plainTextEdit_3 控件未设置，无法写入日志: {text}")

@@ -91,24 +91,34 @@ class SerialInterface:
     def send_data(self, data, is_hex=True):  # 修改：默认is_hex=True
         """
         发送数据
-        data: 待发送数据
+        data: 待发送数据 (支持字符串或整数列表，列表元素需为0-255的整数)
         is_hex: 是否以十六进制发送（True=Hex格式，False=文本格式，默认True）
+                当data为列表时，此参数无效，直接发送列表中的字节值
         返回: (成功标志, 消息)
         """
         if not self.is_open:
             return False, "串口未打开"
 
         try:
-            if is_hex:
+            if isinstance(data, list):
+                # 检查列表元素是否为有效的字节值 (0-255的整数)
+                for i, byte in enumerate(data):
+                    if not isinstance(byte, int) or byte < 0 or byte > 255:
+                        return False, f"列表元素 {i} 无效: 必须是0-255的整数"
+                data_bytes = bytes(data)
+                format_type = "列表"
+            elif is_hex:
                 # Hex格式：转换为字节（移除空格后处理）
                 cleaned_data = data.replace(' ', '')
-                data = bytes.fromhex(cleaned_data)
+                data_bytes = bytes.fromhex(cleaned_data)
+                format_type = "Hex"
             else:
                 # 文本格式：UTF-8编码
-                data = data.encode('utf-8')
+                data_bytes = data.encode('utf-8')
+                format_type = "文本"
 
-            self.ser.write(data)
-            return True, f"发送成功: {len(data)}字节 (格式: {'Hex' if is_hex else '文本'})"
+            self.ser.write(data_bytes)
+            return True, f"发送成功: {len(data_bytes)}字节 (格式: {format_type})"
         except Exception as e:
             return False, f"发送失败: {str(e)}"
 
@@ -139,9 +149,11 @@ class SerialInterface:
 
 if __name__ == '__main__':
     # 示例使用
+    data = [104, 44, 0, 3, 4, 0, 0, 0, 0, 12, 85, 85, 85, 85, 85, 85, 1, 0, 2, 0, 0, 102, 20, 4,0, 16, 104, 1, 0, 2, 0, 0, 102, 104, 17, 4, 52, 52, 57, 56, 39, 22, 6, 22]
     serial_if = SerialInterface()
     print(serial_if.get_available_ports())
     print(serial_if.open_serial("COM71,9600,E,8,1"))
-    print(serial_if.send_data("Hello, World!"))
+    print(serial_if.send_data(data, is_hex=False))
+    print(serial_if.send_data("hello world", is_hex=False))
     print(serial_if.read_data())
     print(serial_if.close_serial())

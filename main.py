@@ -43,29 +43,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_feil2.clicked.connect(lambda: self.select_file("file2"))
         self.pushButtonupgrade.clicked.connect(self.upgrade_start)
 
-        # 初始化串口线程
-        self.serial_thread = SerialThread(serial_if)    #把bsp的串口传给线程，让它去循环的读取数据
-        self.serial_thread.data_received.connect(log.write_to_plain_text_3)
-        self.serial_thread.start_thread()  # 启动串口线程
-
-
-
         # 绑定菜单事件
         self.actionNULL1.triggered.connect(self.toggle_serial_port)
         self.actionNULL1.setText("打开串口")
         log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
+
+                # 初始化串口线程
+        self.serial_thread = SerialThread(serial_if)    #把bsp的串口传给线程，让它去循环的读取数据
+        self.serial_thread.data_received.connect(log.write_to_plain_text_3)
+        self.serial_thread.start_thread()  # 启动串口线程
 
         # 初始化解析线程
         self.parse_thread = ParsingThread()
         # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
         self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
         self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
-
-        # # 初始化处理响应函数
-        # self.parse_thread = ParsingThread()
-        # # ✅ 连接解析线程的信号到日志显示（使用正确的信号名称）
-        # self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
-        # self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
 
         # 配置SpinBox
         self.spinBox_2.setMaximum(2048)
@@ -238,20 +230,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def upgrade_start(self):
         """开始升级流程"""
         # 检查配置有效性
-        config_result = config.config_val_check()
-
+        # config_result = config.config_val_check()
+        config_result = True
         if config_result is True:
             # 配置有效，准备升级参数
             log_wp("配置值有效，开始升级")
-            config.print_config_value()
+            # config.print_config_value()
 
             # 在升级前获取并校验plainTextEdit_4的值
-            step_range = self.get_step_range()
-            if step_range is None:
-                return  # 格式或数值错误，直接返回
-            step, end = step_range
-            config.step_value = step
-            config.end_value = end
+            # step_range = self.get_step_range()
+            # if step_range is None:
+            #     return  # 格式或数值错误，直接返回
+            # step, end = step_range
+            # config.step_value = step
+            # config.end_value = end
+            config.step_value = 1
+            config.end_value = 1024
 
             upgrade_config = {
                 "file1_path": config.file1_path,
@@ -261,17 +255,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 "test_rounds": config.test_count,
                 "upgrade_status": self.pushButtonupgrade.text()
             }
+            print(self.pushButtonupgrade.text());
             # 切换按钮文本
-            if self.pushButtonupgrade.text() == "停止升级":
-                self.pushButtonupgrade.setText("开始升级")
-                self.horizontalSlider.setEnabled(True)  # 停止升级后允许修改
+            if self.pushButtonupgrade.text() == "停止测试":
+                # self.horizontalSlider.setEnabled(True)
+                self.pushButtonupgrade.setText("开始测试")
+                # 发送停止信号
+                self.stop_upgrade_signal.emit(upgrade_config)
+
+            else:
+                self.pushButtonupgrade.setText("停止测试")
+                # self.horizontalSlider.setEnabled(False)  # 开始升级后禁止修改
                 # 发送升级信号
                 self.start_upgrade_signal.emit(upgrade_config)
-            else:
-                self.pushButtonupgrade.setText("停止升级")
-                self.horizontalSlider.setEnabled(False)  # 开始升级后禁止修改
-                # 发送升级信号
-                self.stop_upgrade_signal.emit(upgrade_config)
         else:
             # 配置无效，显示错误信息
             error_items = ", ".join(config_result.keys())

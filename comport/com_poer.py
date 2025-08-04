@@ -2,10 +2,11 @@ import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 import queue
-from protocol.gw13762 import gw13762_check, SApsAffair
+from protocol.gw13762 import gw13762_check, SApsAffair ,dispatch_by_afn_fn
 import log
-from serial_thread import serial_fifo
+from serial_thread import serial_recv_fifo
 from kfifo import KFifoAps
+
 uart_send_fifo = KFifoAps()
 
 affair = SApsAffair()
@@ -35,10 +36,11 @@ class ParsingThread(QThread):
         buffer = b''  # 缓存未处理完的数据
         last_recv_time = time.time()
         while self.running:
+            time.sleep(0.1)
             try:
-                fifolen = serial_fifo.get_data_length()
+                fifolen = serial_recv_fifo.get_data_length()
                 if fifolen > 0:
-                    frame_data = serial_fifo.get(fifolen)
+                    frame_data = serial_recv_fifo.get(fifolen)
                     # 强制保证 frame_data 和 buffer 都是 bytes 类型
                     if isinstance(frame_data, list):
                         frame_data = bytes(frame_data)
@@ -53,7 +55,6 @@ class ParsingThread(QThread):
                         # log.log_info(log.LOG_DEBUG_CMD, "2秒未收到完整帧，清空缓存")
                         buffer = b''
                         last_recv_time = time.time()
-                    time.sleep(0.01)
                     continue
 
                 while True:
@@ -119,7 +120,6 @@ class ParsingThread(QThread):
                     self.parse_result_signal.emit(result)
                     # 移除已处理帧，继续处理剩余
                     buffer = buffer[idx+total_len:]
-                    # 继续while True，处理buffer剩余数据
             except Exception as e:
                 self.parse_result_signal.emit(f"解析线程异常: {str(e)}")
                 log.log_info(log.LOG_DEBUG_CMD, f"解析线程异常: {str(e)}")

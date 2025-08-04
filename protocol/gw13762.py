@@ -1,7 +1,7 @@
 import ctypes
 from enum import IntEnum
 from typing import Tuple
-import log
+# import log
 
 # 常量定义
 LOCAL_ADDR_LEN = 6
@@ -141,7 +141,7 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
         # ...
     def handle_afn_03_fn_0A(afn, fn, serial_num, frame_data):
         print(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
-        log.write_to_plain_text_3(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        # log.write_to_plain_text_3(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
         # 这里写具体处理逻辑
         # ...
     def handle_default(afn, fn, serial_num, frame_data):
@@ -473,8 +473,8 @@ def gw13762_build_frame(
 
 def create_default_frame(afn: int, fn: int, serial_num: int, data: list) -> Tuple[list, int]:
     return gw13762_build_frame(
-        dir=1,  # 默认：下行
-        prm=0,  # 默认：从动站
+        dir=0,  # 默认：下行
+        prm=1,  # 默认：启动站
         mode=0x03,  # 默认：宽带载波通信（参考示例）
         afn=afn,  # 输入：AFN功能码
         fn=fn,  # 输入：FN功能码
@@ -631,9 +631,12 @@ def main():
     # 转换为整数列表
     frame_data = [int(hex_str, 16) for hex_str in frame_hex_str.split()]
 
-    print(f"待解析帧数据长度: {len(frame_data)} 字节")
-    parse_and_print_frame(frame_data)
-
+    # print(f"待解析帧数据长度: {len(frame_data)} 字节")
+    # parse_and_print_frame(frame_data)
+    fdata = create_default_frame(3,1,1,[])
+    print("默认帧数据长度: {len(fdata[0])} 字节")
+    print("hex:", ' '.join(f'{b:02X}' for b in fdata[0]))
+    print(fdata)
 
 if __name__ == "__main__":
     main()
