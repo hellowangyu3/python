@@ -221,6 +221,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             log.write_to_plain_text_3(f"保存spinBox值失败: {str(e)}")
             print(f"save_spinbox_value异常: {str(e)}")
 
+    def get_step_range(self):
+        """获取plainTextEdit_4的步进和截止值，格式必须为2-1024，返回(step, end)或None"""
+        import re
+        text = self.plainTextEdit_4.toPlainText().strip()
+        match = re.fullmatch(r"(\d+)-(\d+)", text)
+        if not match:
+            QtWidgets.QMessageBox.warning(self, "格式错误", "请输入正确格式，如 2-1024")
+            return None
+        step, end = int(match.group(1)), int(match.group(2))
+        if step < 2 or end > 1024 or step >= end:
+            QtWidgets.QMessageBox.warning(self, "数值错误", "步进需≥2，截止≤1024，且步进<截止")
+            return None
+        return step, end
+
     def upgrade_start(self):
         """开始升级流程"""
         # 检查配置有效性
@@ -230,6 +244,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # 配置有效，准备升级参数
             log_wp("配置值有效，开始升级")
             config.print_config_value()
+
+            # 在升级前获取并校验plainTextEdit_4的值
+            step_range = self.get_step_range()
+            if step_range is None:
+                return  # 格式或数值错误，直接返回
+            step, end = step_range
+            config.step_value = step
+            config.end_value = end
 
             upgrade_config = {
                 "file1_path": config.file1_path,
@@ -242,10 +264,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # 切换按钮文本
             if self.pushButtonupgrade.text() == "停止升级":
                 self.pushButtonupgrade.setText("开始升级")
+                self.horizontalSlider.setEnabled(True)  # 停止升级后允许修改
                 # 发送升级信号
                 self.start_upgrade_signal.emit(upgrade_config)
             else:
                 self.pushButtonupgrade.setText("停止升级")
+                self.horizontalSlider.setEnabled(False)  # 开始升级后禁止修改
                 # 发送升级信号
                 self.stop_upgrade_signal.emit(upgrade_config)
         else:
