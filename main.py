@@ -210,7 +210,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """将spinBox当前值保存到全局配置"""
         try:
             if spinbox_type == 1:
-                config.tests_count = value
+                config.test_count = value
             elif spinbox_type == 2:
                 config.len_upgrade_frame = value
             else:
@@ -221,19 +221,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             log.write_to_plain_text_3(f"保存spinBox值失败: {str(e)}")
             print(f"save_spinbox_value异常: {str(e)}")
 
-    def get_step_range(self):
-        """获取plainTextEdit_4的步进和截止值，格式必须为2-1024，返回(step, end)或None"""
-        import re
-        text = self.plainTextEdit_4.toPlainText().strip()
-        match = re.fullmatch(r"(\d+)-(\d+)", text)
-        if not match:
-            QtWidgets.QMessageBox.warning(self, "格式错误", "请输入正确格式，如 2-1024")
-            return None
-        step, end = int(match.group(1)), int(match.group(2))
-        if step < 2 or end > 1024 or step >= end:
-            QtWidgets.QMessageBox.warning(self, "数值错误", "步进需≥2，截止≤1024，且步进<截止")
-            return None
-        return step, end
+
 
     def upgrade_start(self):
         """开始升级流程"""
@@ -245,8 +233,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             log_wp("配置值有效，开始升级")
             config.print_config_value()
 
-            # 在升级前获取并校验plainTextEdit_4的值
-            step_range = self.get_step_range()
+            # # 在升级前获取并校验plainTextEdit_4的值
+            # step_range = self.get_step_range()
             if step_range is None:
                 return  # 格式或数值错误，直接返回
             step, end = step_range
