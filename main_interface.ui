@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>752</width>
+    <width>896</width>
     <height>600</height>
    </rect>
   </property>
@@ -69,7 +69,7 @@
       <x>50</x>
       <y>20</y>
       <width>581</width>
-      <height>268</height>
+      <height>291</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="formLayout_3">
@@ -111,31 +111,38 @@
      <item row="2" column="1">
       <widget class="QSpinBox" name="spinBox"/>
      </item>
-     <item row="3" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="label_4">
        <property name="text">
         <string>传输文件帧长（50-1024）             </string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="5" column="1">
       <widget class="QSpinBox" name="spinBox_2"/>
      </item>
-     <item row="4" column="0">
+     <item row="6" column="0">
+      <widget class="QLabel" name="label_8">
+       <property name="text">
+        <string>传输文件帧步长             </string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="0">
       <widget class="QLabel" name="label_5">
        <property name="text">
         <string> 升级文件1的版本与日期</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="7" column="1">
       <widget class="QPlainTextEdit" name="plainTextEdit_2">
        <property name="plainText">
         <string>升级文件1的版本与日期</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="8" column="1">
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -148,17 +155,24 @@
        </property>
       </spacer>
      </item>
-     <item row="6" column="0">
+     <item row="9" column="0">
       <widget class="QLabel" name="label_6">
        <property name="text">
         <string>升级文件1的版本与日期</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="9" column="1">
       <widget class="QPlainTextEdit" name="plainTextEdit">
        <property name="plainText">
         <string>升级文件2的版本与日期</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QPlainTextEdit" name="plainTextEdit_4">
+       <property name="plainText">
+        <string>步进-截止例如（2-1024）文件帧长-每轮步进2，一直循环到1024</string>
        </property>
       </widget>
      </item>
@@ -170,7 +184,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>752</width>
+     <width>896</width>
      <height>22</height>
     </rect>
    </property>
