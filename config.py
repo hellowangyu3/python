@@ -13,6 +13,9 @@ file1_version = ""  # 存储文件1名称
 file2_path = ""  # 存储文件2路径
 file2_version = ""  # 存储文件2名称
 
+rx_ord = 1
+tx_ord = 1
+
 #升级进度-文件包大小
 file1_size = 0
 file2_size = 0
@@ -28,7 +31,7 @@ total_frame = 0
 file_step_by_step = 0  #步进
 file_step_max_size = 0  # 最大包大小
 len_upgrade_frame = 0  # 升级包帧长度：保存spinBox_2的值（如需）
-
+spin_box_2_value = 0
 def print_config_value():
     log_wp(f"test_count: {test_count}")
     log_wp(f"len_upgrade_frame: {len_upgrade_frame}")
@@ -38,6 +41,9 @@ def print_config_value():
     log_wp(f"file1_version: {file1_version}")
     log_wp(f"file2_path: {file2_path}")
     log_wp(f"file2_version: {file2_version}")
+
+
+
 
 def config_val_check():
     """检查配置值是否有效，返回所有无效项或True"""  # 移动文档字符串到函数顶部
