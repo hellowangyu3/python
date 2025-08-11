@@ -71,6 +71,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_2.setMaximum(2048)
         self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
         self.spinBox_2.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_2.value(), 2))
+        self.spinBox_6maxsize.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_6maxsize.value(), 3))
+        self.spinBox_5step.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_5step.value(), 4))
 
 
 
@@ -213,6 +215,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 config.test_count = value
             elif spinbox_type == 2:
                 config.len_upgrade_frame = value
+            elif spinbox_type == 3:
+                config.file_step_max_size = value
+            elif spinbox_type == 4:
+                config.file_step_by_step = value
             else:
                 log.write_to_plain_text_3(f"ERR:不支持的spinBox类型: {spinbox_type}")
                 return

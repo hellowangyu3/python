@@ -25,7 +25,8 @@ current_data_len = 0
 #升级进度-总帧数
 total_frame = 0
 # 升级方式 递增
-file_step_by_step = 0
+file_step_by_step = 0  #步进
+file_step_max_size = 0  # 最大包大小
 len_upgrade_frame = 0  # 升级包帧长度：保存spinBox_2的值（如需）
 
 def print_config_value():
@@ -43,8 +44,8 @@ def config_val_check():
     errors = {}  # 收集所有无效配置项
 
     # 检查所有配置项，收集所有错误（而非遇到第一个错误就返回）
-    if test_count == 0:
-        errors["测试轮次"] = False
+    # if test_count == 0:
+    #     errors["测试轮次"] = False
     if serial_status == "关闭":
         errors["串口未打开"] = False
     if file1_path == "":
@@ -58,7 +59,7 @@ def config_val_check():
     if len_upgrade_frame == 0:
         errors["升级包帧长度"] = False
     if not errors:
-        total_frame = file1_size // len_upgrade_frame
+        # total_frame = file1_size // len_upgrade_frame
 
     # 统一返回格式：无错误返回True，有错误返回错误字典
     return True if not errors else errors
