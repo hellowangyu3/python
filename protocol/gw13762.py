@@ -227,9 +227,6 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
 
 
 
-    def handle_default(afn, fn, serial_num, frame_data):
-        frame_data_hex = [hex(i) for i in frame_data]
-        print(f"未定义处理函数: AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data_hex}")
 
     def handle_afn_15_fn_01(afn, fn, serial_num, frame_data):
         print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data}")
@@ -247,11 +244,17 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
             page_num_str = ''.join(page_num[i][2:] for i in range(len(page_num)))
             page_num = int(page_num_str, 16)
             print(f"页面号:{page_num}")
+            response_queue.put(int(page_num))
         except IndexError as e:
             print(f"解析错误：{e}")
         except Exception as e:
             print(f"解析异常：{e}")
         # 这里写具体处理逻辑
+
+
+    def handle_default(afn, fn, serial_num, frame_data):
+        frame_data_hex = [hex(i) for i in frame_data]
+        print(f"未定义处理函数: AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data_hex}")
 
     # 分发表，可扩展
     dispatch_table = {
