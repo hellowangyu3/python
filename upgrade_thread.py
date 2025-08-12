@@ -5,26 +5,30 @@
 
 from PyQt6.QtCore import QThread, pyqtSlot, pyqtSignal
 import serial_bsp
-import log
 from kfifo import KFifoAps
 upgrade_fifo = KFifoAps()
-import log
 import time
+import log
 import config
-from protocol.gw13762 import gw13762_build_frame, SApsAffair,create_default_frame
-
+from protocol.gw13762 import create_default_frame
+from log import log_wp ,LOG_PROTOCOL_CMD,log_info
+from log import LOG_PROTOCOL_CMD
+import queue
+from common import *
 
 class upgradeStateMachine:
     STATE_INIT = 0
-    STATE_SEND = 1
-    STATE_WAIT_ACK = 2
+    STATE_1 = 1
+    STATE_2 = 2
+    STATE_EXITS = 3
 
     def __init__(self):
         self.state = self.STATE_INIT
+        self.rcnt = 0
         self.state_table = {
             self.STATE_INIT: self.state_init,
-            self.STATE_SEND: self.state_send,
-            self.STATE_WAIT_ACK: self.state_wait_ack,
+            self.STATE_1: self.state1,
+            self.STATE_2: self.state_wait_ack,
             self.STATE_EXITS: self.state_exits
         }
 
@@ -38,18 +42,49 @@ class upgradeStateMachine:
         # 否则，读取升级文件，将其dat文件拆除
         # if config.file1_version == config.file2_version:
         #     log.write_to_plain_text_3("版本一致，无需升级")
-
         veser_get_dat = create_default_frame(3,1,config.tx_ord,[])#查询版本
-        print("hex:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
-        log.write_to_plain_text_3("TX:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
+        # print("hex:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
+        serial_send_fifo.put(veser_get_dat[0])
+        send_len = serial_send_fifo.get_data_length()
+        send_data = serial_send_fifo.read(send_len)
+        print(f"发送数据长度：{send_len}, 发送数据：{' '.join(f'{b:02X}' for b in send_data)}")
+        log_info(LOG_PROTOCOL_CMD, ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
+        try:
+        # 阻塞等待应答，超时可自定义
+            response = response_queue.get(timeout=5)
+            log_info(LOG_PROTOCOL_CMD, "查询版本应答：" + str(response))
+            print(f"厂商代码: {response['vendor_code']}, 芯片代码: {response['chip_code']}, 版本日期: {response['version_date']}, 版本号: {response['version']}")
+            self.state = self.STATE_1
+            config.tx_ord += 1
+            return
+        except queue.Empty:
+            log.write_to_plain_text_3("查询版本超时")
+            log_info(LOG_PROTOCOL_CMD, "查询版本超时")
+        self.state = self.STATE_INIT
+        return
+        # log.write_to_plain_text_3("TX:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
 
         # ...初始化逻辑...
-        self.state = self.STATE_SEND
+        # self.state = self.STATE_1
 
-    def state_send(self):
-        log.write_to_plain_text_3("状态：SEND")
+    def state1(self):
+        # 准备工作，下发清除下装文件
+        response_queue.clear()
+        veser_clean_dat = create_default_frame(0x15,1,config.tx_ord,[00,00,00,00,00,00,00,00,00,00,00,00])
+        try:
+        # 阻塞等待应答，超时可自定义
+            response = response_queue.get(timeout=5)
+            log_info(LOG_PROTOCOL_CMD, "清除下装文件" + str(response))
+            self.state = self.STATE_2
+            config.tx_ord += 1
+            return
+        except queue.Empty:
+            log.write_to_plain_text_3("清除下装文件")
+            log_info(LOG_PROTOCOL_CMD, "清除下装文件")
+        self.state = self.STATE_INIT
+        return
         # ...发送逻辑...
-        self.state = self.STATE_WAIT_ACK
+        self.state = self.STATE_2
 
     def state_wait_ack(self):
         log.write_to_plain_text_3("状态：WAIT_ACK")

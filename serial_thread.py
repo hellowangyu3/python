@@ -2,10 +2,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import time
 import log
 import threading
-from kfifo import KFifoAps
-
-serial_recv_fifo = KFifoAps()
-serial_send_fifo = KFifoAps()
+from common import *
+# import serial
 
 class SerialThread(QThread):
     """串口线程：使用全局KFIFO缓冲区存储数据"""
@@ -29,20 +27,18 @@ class SerialThread(QThread):
                     self.data_received.emit(data_with_prefix)
                     print(data_with_prefix)
                     log.log_info(log.LOG_DEBUG_CMD, data_with_prefix)
-                    serial_fifo.put(data)
-                    # fifo_data = serial_fifo.get(serial_fifo.get_data_length())
-                    # print(f"获取到的数据: {fifo_data}")
+                    serial_recv_fifo.put(data)
                     # 获取到的数据: [104, 44, 0, 3, 4, 0, 0, 0, 0, 12, 85, 85, 85, 85, 85, 85, 1, 0, 2, 0, 0, 102, 20, 4,
                     #                0, 16, 104, 1, 0, 2, 0, 0, 102, 104, 17, 4, 52, 52, 57, 56, 39, 22, 6, 22]
-                    recv_len = serial_recv_fifo.get_data_length()
-                    if recv_len > 0:
-                        recv_data = serial_recv_fifo.get(recv_len)
-                        hex_data = ' '.join(f"{b:02X}" for b in recv_data)  # 新增：字节转十六进制
-                        data_with_prefix = f"[uart]{hex_data}"  # 修改：使用十六进制数据
-                        self.data_received.emit(data_with_prefix)
-                        print(data_with_prefix)
-                        log.log_info(log.LOG_DEBUG_CMD, data_with_prefix)
-                        self.serial_if.send_data(recv_data)  # 发送数据到串口
+                recv_len = serial_send_fifo.get_data_length()
+                if recv_len > 0:
+                    recv_data = serial_send_fifo.get(recv_len)
+                    hex_data = ' '.join(f"{b:02X}" for b in recv_data)  # 新增：字节转十六进制
+                    data_with_prefix = f"[uart_send]{hex_data}"  # 修改：使用十六进制数据
+                    self.data_received.emit(data_with_prefix)
+                    print(data_with_prefix)
+                    log.log_info(log.LOG_DEBUG_CMD, data_with_prefix)
+                    self.serial_if.send_data(recv_data)  # 发送数据到串口      
             time.sleep(0.01)
             # 发送数据
 

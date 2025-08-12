@@ -47,7 +47,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionNULL1.triggered.connect(self.toggle_serial_port)
         self.actionNULL1.setText("打开串口")
         log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
-
+        log.set_label_7_text_edit(self.label_7)
                 # 初始化串口线程
         self.serial_thread = SerialThread(serial_if)    #把bsp的串口传给线程，让它去循环的读取数据
         self.serial_thread.data_received.connect(log.write_to_plain_text_3)
@@ -233,8 +233,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # # 在升级前获取并校验plainTextEdit_4的值
             # step_range = self.get_step_range()
-            if step_range is None:
-                return  # 格式或数值错误，直接返回
+            # if step_range is None:
+            #     return  # 格式或数值错误，直接返回
             # step, end = step_range
             # config.step_value = step
             # config.end_value = end

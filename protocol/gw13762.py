@@ -1,6 +1,15 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))  # 将父目录（项目根）加入路径
+
 import ctypes
+import binascii
 from enum import IntEnum
 from typing import Tuple
+from log import log_info, set_version_text_edit, LOG_PROTOCOL_CMD  # 现在可以正确导入
+import queue
+from common import *
+
 # import log
 
 # 常量定义
@@ -136,21 +145,121 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
     根据AFN和FN分发到不同的处理函数
     """
     def handle_afn_03_fn_04(afn, fn, serial_num, frame_data):
-        print(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data}")
         # 这里写具体处理逻辑
         # ...
     def handle_afn_03_fn_0A(afn, fn, serial_num, frame_data):
-        print(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
+        print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data}")
         # log.write_to_plain_text_3(f"处理AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}, 数据={frame_data}")
         # 这里写具体处理逻辑
         # ...
+    def handle_afn_03_fn_01(afn, fn, serial_num, frame_data):
+        print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}")   
+        try:
+            # 将数据转换为十六进制字符串列表（带0x前缀）
+            frame_data_hex = [hex(i) for i in frame_data]
+            print(frame_data_hex)
+            
+            # 提取有效数据域（从索引13开始，取前9个有效字节）
+            # 对应数据：['0x43', '0x46', '0x38', '0x46', '0x22', '0x11', '0x24', '0x1', '0x24']
+            valid_data = frame_data_hex[13:13+9]
+            if len(valid_data) < 9:
+                raise IndexError("有效数据不足9字节，无法完成解析")
+            
+            # 1. 解析厂商代码（前2字节，反转字节顺序）
+            # 0x43 → 0x46 反转后 → 'FC'
+            vendor_hex = valid_data[0:2][::-1]  # ['0x46', '0x43']
+            vendor_bytes = [int(h, 16) for h in vendor_hex]
+            vendor_code = ''.join([chr(b) for b in vendor_bytes])
+            
+            # 2. 解析芯片代码（接下来2字节，反转字节顺序）
+            # 0x38 → 0x46 反转后 → 'F8'
+            chip_hex = valid_data[2:4][::-1]  # ['0x46', '0x38']
+            chip_bytes = [int(h, 16) for h in chip_hex]
+            chip_code = ''.join([chr(b) for b in chip_bytes])
+            
+            # 3. 解析版本日期（接下来3字节，BCD码转换）
+            # 0x22 → 22, 0x11 → 11, 0x24 → 24 → 241122
+            date_hex = valid_data[4:7]  # ['0x22', '0x11', '0x24']
+            date_bytes = [int(h, 16) for h in date_hex]
+            
+            # BCD码转十进制函数
+            def bcd_to_dec(bcd):
+                return ((bcd >> 4) & 0x0F) * 10 + (bcd & 0x0F)
+            
+            day = bcd_to_dec(date_bytes[0])  # 22
+            month = bcd_to_dec(date_bytes[1])  # 11
+            year = bcd_to_dec(date_bytes[2])  # 24
+            version_date = f"{year}{month:02d}{day:02d}"  # 241122
+            
+            # 4. 解析版本号（最后2字节，反转后拼接）
+            # 0x1 → 0x24 反转补零后 → 2401
+            version_hex = valid_data[7:9]  # ['0x1', '0x24']
+            version_bytes = [int(h, 16) for h in version_hex]
+            version = f"{version_bytes[1]:02x}{version_bytes[0]:02x}"  # 2401
+            
+            # 输出解析结果
+            print(f"厂商代码-{vendor_code}")
+            print(f"芯片代码-{chip_code}")
+            print(f"版本日期-{version_date}")
+            print(f"版本-{version}")
+            set_version_text_edit(f"{vendor_code}-{chip_code}-{version_date}-{version}")
+            log_info(LOG_PROTOCOL_CMD, f"厂商代码-{vendor_code},芯片代码{chip_code}版本日期{version_date}版本{version_date}")
+            # return {
+            #     "vendor_code": vendor_code,
+            #     "chip_code": chip_code,
+            #     "version_date": version_date,
+            #     "version": version
+            # }
+            response_queue.put({
+                "vendor_code": vendor_code,
+                "chip_code": chip_code,
+                "version_date": version_date,
+                "version": version
+            })
+        except IndexError as e:
+            print(f"解析错误：{e}")
+        except Exception as e:
+            print(f"解析异常：{e}")
+
+        # print(f"版本号: {version}")
+        
+
+
+
     def handle_default(afn, fn, serial_num, frame_data):
-        print(f"未定义处理函数: AFN=0x{afn:02X}, FN=0x{fn:02X}, 序号={serial_num}")
+        frame_data_hex = [hex(i) for i in frame_data]
+        print(f"未定义处理函数: AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data_hex}")
+
+    def handle_afn_15_fn_01(afn, fn, serial_num, frame_data):
+        print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data}")
+        try:
+            # 将数据转换为十六进制字符串列表（带0x前缀）
+            frame_data_hex = [hex(i) for i in frame_data]
+            print(frame_data_hex)
+            
+            # 提取有效数据域（从索引13开始，取前9个有效字节）
+            # 对应数据：['0x43', '0x46', '0x38', '0x46', '0x22', '0x11', '0x24', '0x1', '0x24']
+            valid_data = frame_data_hex[13:13+4]
+            if len(valid_data) < 4:
+                raise IndexError("有效数据不足4字节，无法完成解析")
+            page_num = valid_data[::-1]
+            page_num_str = ''.join(page_num[i][2:] for i in range(len(page_num)))
+            page_num = int(page_num_str, 16)
+            print(f"页面号:{page_num}")
+        except IndexError as e:
+            print(f"解析错误：{e}")
+        except Exception as e:
+            print(f"解析异常：{e}")
+        # 这里写具体处理逻辑
 
     # 分发表，可扩展
     dispatch_table = {
         (0x03, 0x04): handle_afn_03_fn_04,
         (0x03, 0x0A): handle_afn_03_fn_0A,
+        (0x03, 0x01): handle_afn_03_fn_01,
+        (0x15, 0x01): handle_afn_15_fn_01,
+
         # (afn, fn): func
     }
     func = dispatch_table.get((afn, fn), handle_default)
@@ -342,6 +451,8 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
         rx_frame = plocal_src.contents.frame
         serial_num = rx_frame.info.buff[5] if hasattr(rx_frame.info, 'buff') else 0
         frame_data = [plocal_src.contents.data[i] for i in range(plocal_src.contents.datalen)]
+        # 修改为从数据域缓冲区提取数据
+        # frame_data = [p_rx.contents.buff[i] for i in range(p_rx.contents.bufflen)]
         dispatch_by_afn_fn(rx_frame.afn, rx_frame.fn, serial_num, frame_data)
     return result, errcode
 
@@ -423,7 +534,10 @@ def gw13762_build_frame(
     # 填充信息域缓冲区的其他字节
     # for i in range(6):
     #     info.buff[i] = 0x00  # 可以根据实际需求设置
-    info.buff = (0x00, 0x00, 0x40, 0x00, 0x00)
+    if dir == 0:  # 下行
+        info.buff = (0x00, 0x00, 0x00, 0x00, 0x00)
+    else:  # 上行
+        info.buff = (0x00, 0x00, 0x40, 0x00, 0x00)
     info.buff[5] = serial_num
     frame_parts.extend(info.buff)
 
@@ -624,19 +738,25 @@ def parse_and_print_frame(frame_data: list, expected_dir: int = 1):
     serial_num = rx_frame.info.buff[5] if hasattr(rx_frame.info, 'buff') else 0
     dispatch_by_afn_fn(rx_frame.afn, rx_frame.fn, serial_num, list(frame_data))
 
-
 def main():
-    frame_hex_str = "68 38 00 C3 00 00 40 00 00 01 03 02 01 F2 37 08 01 00 00 3C 14 00 4F 04 00 04 0C 51 81 01 00 00 10 80 04 02 00 10 10 13 10 10 13 43 46 38 46 22 11 24 01 24 64 80 25 16"
-
+    # frame_hex_str = "68 18 00 83 00 00 40 00 00 C6 03 01 00 43 46 38 46 22 11 24 01 24 10 16" 
+    # frame_hex_str = "68 13 00 83 00 00 40 00 00 CF 15 01 00 04 00 00 00 AC 16 16" 
+    frame_hex_str = "68 13 00 83 00 00 40 00 00 CC 15 01 00 01 00 00 00 A6 16 " 
     # 转换为整数列表
     frame_data = [int(hex_str, 16) for hex_str in frame_hex_str.split()]
-
-    # print(f"待解析帧数据长度: {len(frame_data)} 字节")
-    # parse_and_print_frame(frame_data)
-    fdata = create_default_frame(3,1,1,[])
-    print("默认帧数据长度: {len(fdata[0])} 字节")
-    print("hex:", ' '.join(f'{b:02X}' for b in fdata[0]))
-    print(fdata)
+   
+    print(f"待解析帧数据长度: {len(frame_data)} 字节")
+    parse_and_print_frame(frame_data)
+    # fdata = create_default_frame(3,1,1,[])
+    # print("默认帧数据长度: {len(fdata[0])} 字节")
+    # print("hex:", ' '.join(f'{b:02X}' for b in fdata[0]))
+    # print(fdata)
+    # fdata = create_default_frame(0x15,1,1,[00,00,00,00,00,00,00,00,00,00,00,00])#下发清装
+    # parse_and_print_frame(fdata[0],0)
+    # # fdata = gw13762_build_frame(1,)
+    # print("默认帧数据长度: {len(fdata[0])} 字节")
+    # print("hex:", ' '.join(f'{b:02X}' for b in fdata[0]))
+    # print(fdata)
 
 if __name__ == "__main__":
     main()

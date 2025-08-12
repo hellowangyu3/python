@@ -4,7 +4,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import queue
 from protocol.gw13762 import gw13762_check, SApsAffair ,dispatch_by_afn_fn
 import log
-from serial_thread import serial_recv_fifo
+from common import *
 from kfifo import KFifoAps
 
 uart_send_fifo = KFifoAps()
