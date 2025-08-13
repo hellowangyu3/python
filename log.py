@@ -79,9 +79,15 @@ def set_version_text_edit(text):
 
 def write_to_plain_text_3(text):
     """往 plainTextEdit_3 文本框中追加内容"""
+    stack = inspect.stack()
+    caller_func = stack[1].function
+    caller_line = stack[1].lineno
     if _plain_text_edit_3 is not None:
         current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         _plain_text_edit_3.appendPlainText(f"[{current_time}] {text}")
+        log_content = f"[{current_time}][{caller_func}:{caller_line}]{text}\n"
+        log_wp(log_content)
+        print(log_content.strip())  # 打印时移除末尾换行符
         # 滚动到底部，确保最新内容可见
         _plain_text_edit_3.verticalScrollBar().setValue(
             _plain_text_edit_3.verticalScrollBar().maximum()

@@ -224,22 +224,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def upgrade_start(self):
         """开始升级流程"""
         # 检查配置有效性
-        # config_result = config.config_val_check()
-        config_result = True
+        config.current_data_len = self.spinBox_2.value()#初始帧长
+        if config.current_data_len is None:
+            log.write_to_plain_text_3(f"当前传输文件帧长未设置，当前值：{config.current_data_len}")
+            return
+        config_result = config.config_val_check()
         if config_result is True:
             # 配置有效，准备升级参数
             log_wp("配置值有效，开始升级")
-            # config.print_config_value()
-
-            # # 在升级前获取并校验plainTextEdit_4的值
-            # step_range = self.get_step_range()
-            # if step_range is None:
+            config.print_config_value()
             #     return  # 格式或数值错误，直接返回
-            # step, end = step_range
-            # config.step_value = step
-            # config.end_value = end
-            config.step_value = 1
-            config.end_value = 1024
 
             upgrade_config = {
                 "file1_path": config.file1_path,
@@ -249,7 +243,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 "test_rounds": config.test_count,
                 "upgrade_status": self.pushButtonupgrade.text()
             }
-            print(self.pushButtonupgrade.text());
+            print(self.pushButtonupgrade.text())
             # 切换按钮文本
             if self.pushButtonupgrade.text() == "停止测试":
                 # self.horizontalSlider.setEnabled(True)

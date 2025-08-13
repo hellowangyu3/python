@@ -29,12 +29,12 @@ file2_size = 0
 current_frame = 0
 #升级进度-当前数据
 current_data = b""
-#升级进度-当前数据长度
+#升级进度-当前数据长度（从初始帧长开始+步进每轮[传输文件帧长]）
 current_data_len = 0
 #升级进度-总帧数
 total_frame = 0
-# 升级方式 递增
-file_step_by_step = 0  #步进
+
+file_step_by_step = 2  #步长
 file_step_max_size = 0  # 最大包大小
 len_upgrade_frame = 0  # 升级包帧长度：保存spinBox_2的值（如需）
 spin_box_2_value = 0
@@ -72,6 +72,10 @@ def config_val_check():
         errors["升级文件2版本信息"] = False
     if len_upgrade_frame == 0:
         errors["升级包帧长度"] = False
+    if file_step_by_step == 0:
+        errors["升级包步长"] = False
+    if file_step_max_size == 0:
+        errors["升级包最大包大小"] = False
     # if not errors:
         # total_frame = file1_size // len_upgrade_frame
 

@@ -215,7 +215,8 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
                 "vendor_code": vendor_code,
                 "chip_code": chip_code,
                 "version_date": version_date,
-                "version": version
+                "version": version,
+                "serial_num": serial_num
             })
         except IndexError as e:
             print(f"解析错误：{e}")
@@ -244,7 +245,7 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
             page_num_str = ''.join(page_num[i][2:] for i in range(len(page_num)))
             page_num = int(page_num_str, 16)
             print(f"页面号:{page_num}")
-            response_queue.put(int(page_num))
+            response_queue.put({"page_num": page_num,"serial_num":serial_num})
         except IndexError as e:
             print(f"解析错误：{e}")
         except Exception as e:
@@ -311,7 +312,7 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
     )
 
     # 调试信息：打印原始数据
-    print("\n原始帧数据:")
+    # print("\n原始帧数据:")
     print([hex(p_rxbuf[i]) for i in range(plocal_src.contents.datalen)])
 
     # 拷贝信息域（至少需要10字节数据）
@@ -334,7 +335,7 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
 
     # 解析长度（大端模式）
     datalen = (p_rxbuf[2] << 8) | p_rxbuf[1]
-    print(f"调试：解析得到长度: {datalen}")
+    # print(f"调试：解析得到长度: {datalen}")
 
     # 检测长度合法性
     if datalen < LOCAL_FRAME_LEN_MIN or plocal_src.contents.datalen < datalen:
@@ -343,14 +344,14 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
 
     # 解析控制域并检测方向
     p_rx.contents.ctrl.ctrl = p_rxbuf[3]
-    print(f"调试：控制域值=0x{p_rxbuf[3]:02X}, 解析得到方向={p_rx.contents.ctrl.bit.dir}, 预期方向={dir}")
+    # print(f"调试：控制域值=0x{p_rxbuf[3]:02X}, 解析得到方向={p_rx.contents.ctrl.bit.dir}, 预期方向={dir}")
     if p_rx.contents.ctrl.bit.dir != dir:
-        print(f"调试：方向错误，预期{dir}，实际{p_rx.contents.ctrl.bit.dir}")
+        # print(f"调试：方向错误，预期{dir}，实际{p_rx.contents.ctrl.bit.dir}")
         return False, ErrorCode.FN_DENY_05H
 
     # 检测帧尾
     if p_rxbuf[datalen - 1] != 0x16:
-        print(f"调试：帧尾错误，预期0x16，实际0x{p_rxbuf[datalen - 1]:02X}")
+        # print(f"调试：帧尾错误，预期0x16，实际0x{p_rxbuf[datalen - 1]:02X}")
         return False, ErrorCode.FN_DENY_05H
 
     # 保存基本信息
@@ -363,12 +364,12 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
     for i in range(datalen - 6):
         crc += p_rxbuf[4 + i]
     crc &= 0xFF  # 确保是8位
-    print(f"调试：计算得到校验和=0x{crc:02X}, 帧中校验和=0x{p_rxbuf[datalen - 2]:02X}")
+    # print(f"调试：计算得到校验和=0x{crc:02X}, 帧中校验和=0x{p_rxbuf[datalen - 2]:02X}")
     if p_rxbuf[datalen - 2] != crc:
         return False, ErrorCode.FN_DENY_03H
 
     # 处理地址域和功能码
-    print(f"调试：module_id={p_rx.contents.info.down.module_id}, HOST_NODE={HOST_NODE}")
+    # print(f"调试：module_id={p_rx.contents.info.down.module_id}, HOST_NODE={HOST_NODE}")
     if p_rx.contents.info.down.module_id == HOST_NODE:
         # 无地址域情况 - 正确解析AFN和FN的位置
         if tmp_buf:
@@ -382,8 +383,8 @@ def gw13762_check(p_affair, dir: int) -> Tuple[bool, int]:
             dt2 = p_rxbuf[dt2_pos] if dt2_pos < datalen else 0
             p_rx.contents.fn = gw13762_dt_to_fn(dt1, dt2)
 
-            print(f"调试：无地址域 - AFN位置={afn_pos}, DT1位置={dt1_pos}, DT2位置={dt2_pos}")
-            print(f"调试：AFN=0x{p_rx.contents.afn:02X}, DT1=0x{dt1:02X}, DT2=0x{dt2:02X}, FN=0x{p_rx.contents.fn:02X}")
+            # print(f"调试：无地址域 - AFN位置={afn_pos}, DT1位置={dt1_pos}, DT2位置={dt2_pos}")
+            # print(f"调试：AFN=0x{p_rx.contents.afn:02X}, DT1=0x{dt1:02X}, DT2=0x{dt2:02X}, FN=0x{p_rx.contents.fn:02X}")
 
             # 处理数据域
             p_rx.contents.bufflen = datalen - LOCAL_FRAME_LEN_MIN
@@ -634,14 +635,14 @@ def wwgw13762_check():
         # 执行校验
         success, err = gw13762_check(affair, 1)
         print(f"\n校验结果: {'成功' if success else '失败'}")
-        print(f"错误码: 0x{err:02X}")
+        # print(f"错误码: 0x{err:02X}")
 
         if success:
             rx_frame = frame.frame
             print(f"解析结果: AFN=0x{rx_frame.afn:02X}, FN=0x{rx_frame.fn:02X}")
             # 新增：打印数据域（十六进制格式）
             data_field = [f"{rx_frame.buff[i]:02X}" for i in range(rx_frame.bufflen)]
-            print(f"数据域: [{', '.join(data_field)}]")
+            # print(f"数据域: [{', '.join(data_field)}]")
 
     else:
         print(f"构帧失败，错误码: 0x{err:02X}")
@@ -763,3 +764,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    respons = response_queue.get()
+    # print(respons["serial_num"])
+    # print(respons["page_num"])
+    print(str(respons))

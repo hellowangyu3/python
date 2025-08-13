@@ -56,7 +56,7 @@
       <x>40</x>
       <y>30</y>
       <width>591</width>
-      <height>302</height>
+      <height>304</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="formLayout_3">
@@ -162,7 +162,7 @@
      <item row="8" column="0">
       <widget class="QLabel" name="label_6">
        <property name="text">
-        <string>升级文件1的版本与日期</string>
+        <string>升级文件2的版本与日期</string>
        </property>
       </widget>
      </item>
@@ -182,7 +182,7 @@
      <x>0</x>
      <y>0</y>
      <width>665</width>
-     <height>23</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu">
