@@ -21,7 +21,7 @@ class SerialThread(QThread):
                 success, data = self.serial_if.read_data(1024)
                 if success and data:
                     hex_data = ' '.join(f"{b:02X}" for b in data)  # 新增：字节转十六进制
-                    data_with_prefix = f"[uart]{hex_data}"  # 修改：使用十六进制数据
+                    data_with_prefix = f"[RX]{hex_data}"  # 修改：使用十六进制数据
                     # [收]68 2C 00 03 04 00 00 00 00 0C 55 55 55 55 55 55 01 00 02 00 00 66 14 04 00 10 68 01 00 02
                     # 00 00 66 68 11 04 34 34 39 38 27 16 06 16[收]68 2C 00 03 04 00 00 00 00 0C 55 55 55 55 55 55 01 00 02 00 00 66 14 04 00 10 68 01 00 02 00 00 66 68 11 04 34 34 39 38 27 16 06 16
                     self.data_received.emit(data_with_prefix)
@@ -34,12 +34,12 @@ class SerialThread(QThread):
                 if recv_len > 0:
                     recv_data = serial_send_fifo.get(recv_len)
                     hex_data = ' '.join(f"{b:02X}" for b in recv_data)  # 新增：字节转十六进制
-                    data_with_prefix = f"[uart_send]{hex_data}"  # 修改：使用十六进制数据
+                    data_with_prefix = f"[TX]{hex_data}"  # 修改：使用十六进制数据
                     self.data_received.emit(data_with_prefix)
                     print(data_with_prefix)
                     log.log_info(log.LOG_DEBUG_CMD, data_with_prefix)
                     self.serial_if.send_data(recv_data)  # 发送数据到串口      
-            time.sleep(0.01)
+            time.sleep(0.1)
             # 发送数据
 
 

@@ -48,6 +48,18 @@ def print_config_value():
     log_wp(f"file1_version: {file1_version}")
     log_wp(f"file2_path: {file2_path}")
     log_wp(f"file2_version: {file2_version}")
+    log_wp(f"current_version: {current_version}")
+    log_wp(f"upgrade_version: {upgrade_version}")
+    log_wp(f"rx_ord: {rx_ord}")
+    log_wp(f"tx_ord: {tx_ord}")
+    log_wp(f"file1_size: {file1_size}")
+    log_wp(f"file2_size: {file2_size}")
+    log_wp(f"current_frame: {current_frame}")
+    log_wp(f"current_data: {current_data}")
+    log_wp(f"current_data_len: {current_data_len}")
+    log_wp(f"total_frame: {total_frame}")
+    log_wp(f"file_step_by_step: {file_step_by_step}")
+    log_wp(f"file_step_max_size: {file_step_max_size}")
 
 
 

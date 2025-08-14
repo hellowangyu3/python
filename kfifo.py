@@ -1,4 +1,4 @@
-from log import log_wp
+
 
 
 class KFifoAps:
@@ -28,7 +28,7 @@ class KFifoAps:
         """
         # 修复1：检查数据类型（仅允许bytes或整数列表）
         if not isinstance(data, (bytes, list)):
-            log_wp(f"put错误：不支持的数据类型 {type(data)}，仅允许bytes或整数列表")
+            print(f"put错误：不支持的数据类型 {type(data)}，仅允许bytes或整数列表")
             return 0
 
         # 修复2：若为bytes类型，转换为整数列表（与缓冲区存储格式统一）

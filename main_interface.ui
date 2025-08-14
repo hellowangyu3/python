@@ -124,7 +124,7 @@
         <number>2</number>
        </property>
        <item row="1" column="1">
-        <widget class="QSpinBox" name="spinBox_5step">
+        <widget class="QSpinBox" name="spinBox_max_size">
          <property name="minimum">
           <number>128</number>
          </property>
@@ -134,7 +134,7 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QSpinBox" name="spinBox_6maxsize">
+        <widget class="QSpinBox" name="spinBox_step_size">
          <property name="minimum">
           <number>2</number>
          </property>

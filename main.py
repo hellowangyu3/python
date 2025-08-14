@@ -1,9 +1,11 @@
 import sys
 import time
 import os
-import log
+import log 
+from log import start_log_thread
 import config
-from PyQt6 import QtWidgets, QtCore
+from PyQt6 import QtWidgets
+import PyQt6.QtCore as QtCore
 from PyQt6.QtCore import QThread, pyqtSignal
 
 import main_interface
@@ -17,8 +19,41 @@ from comport.com_poer import ParsingThread
 # 初始化日志和串口接口
 log_wp = log.log_wp
 serial_if = SerialInterface()
+import faulthandler
+import sys
 
+import tracemalloc
+import sys
+from PyQt6.QtCore import QThread
 
+class UpgradeThread(QThread):
+    def run(self):
+        # 启动内存追踪
+        tracemalloc.start()
+        # 记录初始快照
+        snapshot_initial = tracemalloc.take_snapshot()
+        try:
+            while self.is_running:
+                self.upgrade_state_machine.step()
+                time.sleep(0.01)
+        except Exception as e:
+            # 捕获异常时记录快照
+            snapshot_crash = tracemalloc.take_snapshot()
+            self.analyze_memory_leak(snapshot_initial, snapshot_crash)
+            sys.exit(1)
+        finally:
+            tracemalloc.stop()
+
+    def analyze_memory_leak(self, initial, crash):
+        """对比崩溃前后的内存快照，输出异常增长的代码位置"""
+        top_stats = crash.compare_to(initial, 'lineno')
+        log.write_to_plain_text_3("===== 崩溃前内存异常增长 =====")
+        for stat in top_stats[:10]:  # 取前10个最可能的问题点
+            log.write_to_plain_text_3(f"{stat.filename}:{stat.lineno} "
+                                     f"内存增长: {stat.size_diff_human} "
+                                     f"对象数: {stat.count_diff}")
+            
+            
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     # 定义升级开始信号（传递配置参数字典给线程）
     start_upgrade_signal = pyqtSignal(dict)
@@ -59,12 +94,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.parse_thread.parse_result_signal.connect(log.write_to_plain_text_3)
         self.parse_thread.start()  # ✅ 使用QThread内置的start()方法启动线程
 
+        self.log_thread = start_log_thread()
+
         # 配置SpinBox
         self.spinBox_2.setMaximum(2048)
         self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
         self.spinBox_2.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_2.value(), 2))
-        self.spinBox_6maxsize.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_6maxsize.value(), 3))
-        self.spinBox_5step.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_5step.value(), 4))
+        self.spinBox_max_size.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_max_size.value(), 3))
+        self.spinBox_step_size.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_step_size.value(), 4))
 
 
 
@@ -74,6 +111,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.start_upgrade_signal.connect(self.upgrade_thread.run_upgrade)
         self.stop_upgrade_signal.connect(self.upgrade_thread.stop_upgrade)
         self.upgrade_thread.log_signal.connect(log.write_to_plain_text_3)
+
+
+        # 在程序入口处开启
+        faulthandler.enable(file=open("./crash_log.txt", "w"))  # 崩溃日志写入文件
 
     def toggle_serial_port(self):
         """切换串口状态（打开/关闭）并更新菜单名称"""
@@ -222,9 +263,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
     def upgrade_start(self):
-        """开始升级流程"""
+        """开始升级流程（添加线程状态检查）"""
         # 检查配置有效性
-        config.current_data_len = self.spinBox_2.value()#初始帧长
+        config.current_data_len = config.len_upgrade_frame #初始帧长
         if config.current_data_len is None:
             log.write_to_plain_text_3(f"当前传输文件帧长未设置，当前值：{config.current_data_len}")
             return
@@ -250,12 +291,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.pushButtonupgrade.setText("开始测试")
                 # 发送停止信号
                 self.stop_upgrade_signal.emit(upgrade_config)
-
             else:
-                self.pushButtonupgrade.setText("停止测试")
-                # self.horizontalSlider.setEnabled(False)  # 开始升级后禁止修改
-                # 发送升级信号
-                self.start_upgrade_signal.emit(upgrade_config)
+                # 新增：检查升级线程状态
+                if not self.upgrade_thread.isRunning():
+                    self.pushButtonupgrade.setText("停止测试")
+                    self.start_upgrade_signal.emit(upgrade_config)
+                else:
+                    log.write_to_plain_text_3("升级线程已在运行中，请勿重复启动")
+
+            # self.horizontalSlider.setEnabled(False)  # 开始升级后禁止修改
+            # 发送升级信号
+            self.start_upgrade_signal.emit(upgrade_config)
         else:
             # 配置无效，显示错误信息
             error_items = ", ".join(config_result.keys())

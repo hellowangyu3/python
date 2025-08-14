@@ -211,7 +211,7 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
             #     "version_date": version_date,
             #     "version": version
             # }
-            response_queue.put({
+            response_03F1_queue.put({
                 "vendor_code": vendor_code,
                 "chip_code": chip_code,
                 "version_date": version_date,
@@ -224,10 +224,6 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
             print(f"解析异常：{e}")
 
         # print(f"版本号: {version}")
-        
-
-
-
 
     def handle_afn_15_fn_01(afn, fn, serial_num, frame_data):
         print(f"处理AFN={afn:02x}, FN={fn}, 序号={serial_num}, 数据={frame_data}")
@@ -235,23 +231,30 @@ def dispatch_by_afn_fn(afn: int, fn: int, serial_num: int, frame_data: list):
             # 将数据转换为十六进制字符串列表（带0x前缀）
             frame_data_hex = [hex(i) for i in frame_data]
             print(frame_data_hex)
-            
-            # 提取有效数据域（从索引13开始，取前9个有效字节）
-            # 对应数据：['0x43', '0x46', '0x38', '0x46', '0x22', '0x11', '0x24', '0x1', '0x24']
-            valid_data = frame_data_hex[13:13+4]
+
+            # 提取有效数据域（从索引13开始，取前4个有效字节）
+            valid_data = frame_data_hex[13:13 + 4]
             if len(valid_data) < 4:
                 raise IndexError("有效数据不足4字节，无法完成解析")
-            page_num = valid_data[::-1]
-            page_num_str = ''.join(page_num[i][2:] for i in range(len(page_num)))
-            page_num = int(page_num_str, 16)
+
+            # 转换为整数列表（原始字节值）
+            page_bytes = [int(h, 16) for h in valid_data]
+            print(f"原始字节(小端模式): {[hex(b) for b in page_bytes]}")
+
+            # 小端模式处理：低位字节在前，高位字节在后
+            # 例如 [0x00, 0x01, 0x00, 0x00] 应解析为 0x00000100 = 256
+            page_num = 0
+            for i in range(len(page_bytes)):
+                # 小端模式：第i个字节左移8*i位
+                page_num |= (page_bytes[i] << (8 * i))
+
             print(f"页面号:{page_num}")
-            response_queue.put({"page_num": page_num,"serial_num":serial_num})
+            response_15F1_queue.put({"page_num": page_num, "serial_num": serial_num})
+
         except IndexError as e:
             print(f"解析错误：{e}")
         except Exception as e:
             print(f"解析异常：{e}")
-        # 这里写具体处理逻辑
-
 
     def handle_default(afn, fn, serial_num, frame_data):
         frame_data_hex = [hex(i) for i in frame_data]
@@ -745,12 +748,18 @@ def parse_and_print_frame(frame_data: list, expected_dir: int = 1):
 def main():
     # frame_hex_str = "68 18 00 83 00 00 40 00 00 C6 03 01 00 43 46 38 46 22 11 24 01 24 10 16" 
     # frame_hex_str = "68 13 00 83 00 00 40 00 00 CF 15 01 00 04 00 00 00 AC 16 16" 
-    frame_hex_str = "68 13 00 83 00 00 40 00 00 CC 15 01 00 01 00 00 00 A6 16 " 
-    # 转换为整数列表
+    frame_hex_str = "68 13 00 83 00 00 40 00 00 66 15 01 00 06 0D 00 00 52 16"
+    # frame_hex_str = "68 9a 00 43 00 00 00 00 00 00 15 01 00 03 00 00 a4 0d fd 00 00 00 80 00 ab 35 64 53 8b 94 2f 8f ee d6 02 ed 3a 8e 74 4e 75 2f 7f 3c dc 05 2a d8 53 c5 58 d9 48 a1 e6 f0 06 3c 78 c6 a9 1e 96 62 b5 42 34 3a 10 3d 27 83 31 7c fe 6b 1c b7 02 db 6e bd 22 45 55 e9 ea c4 41 18 d9 83 23 3e 7a e1 5d 30 5d a9 33 e8 d3 58 a6 85 44 54 e5 cd 66 21 7c 86 f1 b7 33 83 c8 8a ec 3e 31 e4 9d 4f b3 41 cd 8b f2 ef c9 eb f5 f0 5b 22 02 06 a9 4e 5b 03 ed b2 ce e7 ea 84 76 12 71 16"    # 转换为整数列表
     frame_data = [int(hex_str, 16) for hex_str in frame_hex_str.split()]
-   
+    print("待解析帧数据: ", frame_data)
     print(f"待解析帧数据长度: {len(frame_data)} 字节")
     parse_and_print_frame(frame_data)
+
+    # frame_data2 = create_default_frame(0x15, 1,1, [3, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00])
+    # print("默认帧数据长度: {len(frame_data2[0])} 字节")
+    # print("hex:", ' '.join(f'{b:02X}' for b in frame_data2[0]))
+
+
     # fdata = create_default_frame(3,1,1,[])
     # print("默认帧数据长度: {len(fdata[0])} 字节")
     # print("hex:", ' '.join(f'{b:02X}' for b in fdata[0]))

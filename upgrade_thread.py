@@ -4,6 +4,7 @@
 
 
 from PyQt6.QtCore import QThread, pyqtSlot, pyqtSignal
+import PyQt6.QtCore as QtCore
 import serial_bsp
 from kfifo import KFifoAps
 upgrade_fifo = KFifoAps()
@@ -17,22 +18,23 @@ import queue
 from common import *
 from Upgrade_file_opt import get_file_version
 from Upgrade_file_opt import crop_file_by_size ,read_line_with_count,create_file_info_bytes,list_to_hex_str
-
+import time
 
 parse_file1_path = "./firmware_output1.txt"
 parse_file2_path = "./firmware_output2.txt"
 
 class upgradeStateMachine:
-    STATE_INIT = 0
-    STATE_0 = 1
-    STATE_1 = 2
-    STATE_2 = 3
+    
+    STATE_0 = 0
+    STATE_1 = 1
+    STATE_2 = 2
+    STATE_INIT = 15
     STATE_EXITS = 255
 
     def __init__(self):
         self.state = self.STATE_INIT
         self.rcnt = 0
-        self.test_cnt = 0
+        # self.test_cnt = 0   # 测试轮次用于帧长增加
         self.currt_data_file = ""  # 当前升级数据文件路径
         self.dat_count_total = 0  # 当前升级数据总数
         self.currt_data_cnt = 0#当前应该传输哪一行数据了
@@ -65,10 +67,17 @@ class upgradeStateMachine:
         if self.currt_data_file == "":
             self.currt_data_file = config.file1_path
         config.current_data_len = config.test_count * config.file_step_by_step + config.len_upgrade_frame
+        if config.current_data_len > config.file_step_max_size:
+            print(f"当前帧长{config.current_data_len}大于文件最大长度{config.file_step_max_size}")
+            log.write_to_plain_text_3("测试结束！你先重启吧，之后的功能还没做呢")
+            self.state_change(self.STATE_EXITS)
+            return
+        # 裁剪文件
         success, line_count = crop_file_by_size(self.currt_data_file , self.currt_file_upgrade_prease,config.current_data_len)
         if success:
             print(f"文件裁剪完成，共 {line_count} 行")
-            self.dat_count_total = line_count+1
+            log.log_info(LOG_PROTOCOL_CMD, f"文件裁剪完成，共 {line_count} 行, 文件路径: {self.currt_file_upgrade_prease},当前帧长{config.current_data_len}")
+            self.dat_count_total = line_count
             self.state_change(self.STATE_0)
         else:
             print(f"文件裁剪失败")
@@ -80,7 +89,7 @@ class upgradeStateMachine:
         # 否则，读取升级文件，将其dat文件拆除
         # if config.file1_version == config.file2_version:
         #     log.write_to_plain_text_3("版本一致，无需升级")
-
+        response_03F1_queue.queue.clear()
         veser_get_dat = create_default_frame(3,1,config.tx_ord,[])#查询版本
         print("hex:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
         serial_send_fifo.put(veser_get_dat[0])
@@ -91,7 +100,7 @@ class upgradeStateMachine:
         log_info(LOG_PROTOCOL_CMD, ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
         try:
         # 阻塞等待应答，超时可自定义
-            response = response_queue.get(timeout=5)
+            response = response_03F1_queue.get(timeout=5)
             log_info(LOG_PROTOCOL_CMD, "查询版本应答：" + str(response))
             print(f"厂商代码: {response['vendor_code']}, 芯片代码: {response['chip_code']}, 版本日期: {response['version_date']}, 版本号: {response['version']}")
             log_info(LOG_PROTOCOL_CMD, f"查询版本应答：{response}")
@@ -111,6 +120,7 @@ class upgradeStateMachine:
         except queue.Empty:
             log.write_to_plain_text_3("查询版本超时")
             log_info(LOG_PROTOCOL_CMD, "查询版本超时")
+        self.state_change(self.STATE_0)
         return
         # log.write_to_plain_text_3("TX:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
 
@@ -119,6 +129,7 @@ class upgradeStateMachine:
 
     def state1(self):
         # 准备工作，下发清除下装文件
+        response_15F1_queue.queue.clear()
         veser_clean_dat = create_default_frame(0x15,1,config.tx_ord,[00,00,00,00,00,00,00,00,00,00,00,00])
         serial_send_fifo.put(veser_clean_dat[0])
         send_len = serial_send_fifo.get_data_length()
@@ -126,7 +137,7 @@ class upgradeStateMachine:
         print(f"发送数据长度：{send_len}, 发送数据：{' '.join(f'{b:02X}' for b in send_data)}")
         try:
         # 阻塞等待应答，超时可自定义
-            response = response_queue.get(timeout=5)
+            response = response_15F1_queue.get(timeout=5)
             log_info(LOG_PROTOCOL_CMD, "清除下装文件" + str(response))
             config.tx_ord += 1
             self.state_change(self.STATE_2)
@@ -138,48 +149,114 @@ class upgradeStateMachine:
         return
     
     def state2(self):
+        if self.currt_data_cnt >= self.dat_count_total:
+            log.write_to_plain_text_3("升级文件发送完毕")
+            config.test_count += 1
+            self.state_change(self.STATE_INIT)
+            time.sleep(10)
+            return
+
         # 发送升级文件
-        read_status, read_count, content = read_line_with_count(self.currt_data_file, self.currt_data_cnt)
+        read_status, read_count, content = read_line_with_count(self.currt_file_upgrade_prease, self.currt_data_cnt)
         print(f"读取状态: {read_status}")
         print(f"读取次数: {read_count}")
         print(f"行内容: {content}")
+
+        # 检查内容是否为空或无效
+        if not content or len(content.strip()) == 0:
+            log.write_to_plain_text_3(f"无效的文件内容，第{self.currt_data_cnt}行")
+            self.state_change(self.STATE_EXITS)
+            return
+
+        # 转换内容为字节列表（修复重复代码）
         hex_parts = content.split()
-        content_bytes = [int(hex_part, 16) for hex_part in hex_parts]
-        # 转换内容为字节列表
-        hex_parts = content.split()
-        content_bytes = [int(hex_part, 16) for hex_part in hex_parts]
+        try:
+            content_bytes = [int(hex_part, 16) for hex_part in hex_parts]
+        except ValueError as e:
+            log.write_to_plain_text_3(f"解析十六进制数据失败: {str(e)}")
+            self.state_change(self.STATE_EXITS)
+            return
+
         print(f"文件内容字节列表长度: {len(content_bytes)}")
+
+        # 检查字节长度是否符合预期
+        if len(content_bytes) != config.current_data_len:
+            log.write_to_plain_text_3(f"字节长度不匹配，预期{config.current_data_len}，实际{len(content_bytes)}")
+            self.state_change(self.STATE_EXITS)
+            return
+
         # 生成文件信息字节并与内容合并
         info_bytes = create_file_info_bytes(
             file_identifier=3,  # 对应 03
             file_attribute=0,  # 对应 00
             file_command=0,  # 对应 00
             total_segments=self.dat_count_total,  # 使用实际总段数
-            segment_identifier=self.currt_data_cnt,  # 当前段标识（第5行）
-            segment_length=config.current_data_len  # 段长度128
+            segment_identifier=self.currt_data_cnt,  # 当前段标识
+            segment_length=config.current_data_len  # 段长度
         )
         # 合并文件信息和内容字节
         full_bytes = info_bytes + content_bytes
-        hex_result = ' '.join(f'{b:02X}' for b in full_bytes)
-        print("完整字节序列：", hex_result)
-        # 生成帧并打印
-        gw13762_frame = create_default_frame(0x15, 1, 1, full_bytes)
-        hex_str2 = list_to_hex_str(gw13762_frame[0], uppercase=False, prefix=False, separator=' ')
-        log.write_to_plain_text_3(f"TX: {hex_str2}")
-        # 发送数据
-        serial_send_fifo.put(gw13762_frame[0])
-        try:
-            # 阻塞等待应答，超时可自定义
-            response = response_queue.get(timeout=5)
-            log_info(LOG_PROTOCOL_CMD, "升级文件应答：" + str(response))
-            config.tx_ord += 1
-            self.state_change(self.STATE_2)
+
+        # 新增：完整数据长度校验（防止堆溢出）
+        MAX_FRAME_SIZE = 1024+15  # 根据协议设置最大允许长度
+        info_length = len(info_bytes)
+        content_length = len(content_bytes)
+        total_length = info_length + content_length
+
+        if total_length > MAX_FRAME_SIZE:
+            log.write_to_plain_text_3(f"数据长度超过最大限制！总长度:{total_length}, 最大:{MAX_FRAME_SIZE}")
+            self.state_change(self.STATE_EXITS)
             return
-        except queue.Empty:
-            log.write_to_plain_text_3("升级文件超时")
-            log_info(LOG_PROTOCOL_CMD, "升级文件超时")
-            self.send_cnt += 1
-        self.state_change(self.STATE_EXITS)
+
+        # 生成帧并发送（添加异常捕获）
+        try:
+            gw13762_frame = create_default_frame(0x15, 1, config.tx_ord, full_bytes)
+            # 检查帧生成结果是否有效
+            if not gw13762_frame or len(gw13762_frame) == 0:
+                raise ValueError("生成的协议帧为空")
+
+            # 发送数据（限制单次发送大小）
+            frame_data = gw13762_frame[0]
+            if len(frame_data) > MAX_FRAME_SIZE:
+                raise OverflowError(f"帧数据超出缓冲区大小:{len(frame_data)}")
+
+            serial_send_fifo.put(frame_data)
+            # 等待应答
+            try:
+                response = response_15F1_queue.get(timeout=5)
+                # 验证响应是否有效字典
+                if not isinstance(response, dict):
+                    raise ValueError("响应不是有效的字典对象")
+
+                log_info(LOG_PROTOCOL_CMD, "升级文件应答：" + str(response))
+
+                # 检查响应中的必要键
+                if 'serial_num' not in response or 'page_num' not in response:
+                    raise KeyError("响应缺少必要的字段")
+
+                if response['serial_num'] == config.tx_ord and response['page_num'] == self.currt_data_cnt:
+                    log_info(LOG_PROTOCOL_CMD, f"升级文件发送成功，第{self.currt_data_cnt}行")
+                    # 更新序号和计数器
+                    config.tx_ord = (config.tx_ord + 1) % 256  # 使用模运算避免溢出
+                    self.currt_data_cnt += 1
+                    self.state_change(self.STATE_2)
+                else:
+                    log.log_info(LOG_PROTOCOL_CMD, f"serial_num: {response.get('serial_num')} page_num: {response.get('page_num')} {config.tx_ord} : {self.currt_data_cnt}")
+                    log.write_to_plain_text_3(f"升级文件发送失败，第{self.currt_data_cnt}行")
+                    self.state_change(self.STATE_EXITS)
+
+            except queue.Empty:
+                log.write_to_plain_text_3("15F1发送超时")
+                self.send_cnt += 1
+                if self.send_cnt >= 3:
+                    self.state_change(self.STATE_EXITS)
+            except (KeyError, ValueError) as e:
+                log.write_to_plain_text_3(f"响应解析错误: {str(e)}")
+                self.state_change(self.STATE_EXITS)
+
+        except Exception as e:
+            log.write_to_plain_text_3(f"帧生成失败: {str(e)}")
+            self.state_change(self.STATE_EXITS)
         return
 
 
@@ -223,7 +300,7 @@ class UpgradeThread(QThread):
         while self.is_running:
             self.upgrade_state_machine.step()
             # log.write_to_plain_text_3("升级线程启动，开始执行升级...")
-            time.sleep(1)
+            # time.sleep(0.5)
 
     # def read_upgrade_file(self,num_of_bytes):
     #
@@ -265,3 +342,45 @@ class UpgradeThread(QThread):
         """停止升级线程（供主窗口调用）"""
         self.is_running = False
         log.write_to_plain_text_3("升级线程已停止")
+
+
+
+class UpgradeThread(QThread):
+    """升级线程：接收配置参数并执行升级逻辑，通过信号返回日志"""
+    log_signal = pyqtSignal(str)  # 发送日志信息给主窗口
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.is_running = False  # 线程运行状态标志
+        self.upgrade_state_machine = upgradeStateMachine()
+        self.lock = QtCore.QMutex()  # 添加线程锁防止并发问题
+
+    @pyqtSlot(dict)  # 接收主窗口发送的配置参数
+    def run_upgrade(self, config):
+        """启动升级流程（确保线程安全）"""
+        self.lock.lock()
+        try:
+            if not self.is_running:
+                self.is_running = True
+                self.config = config
+                self.start()  # 启动线程的run()方法
+                log.write_to_plain_text_3("升级线程已启动")
+            else:
+                log.write_to_plain_text_3("升级线程已在运行中")
+        finally:
+            self.lock.unlock()
+
+    def run(self):
+        """线程主循环（仅执行一次）"""
+        while self.is_running:
+            self.upgrade_state_machine.step()
+            time.sleep(0.01)  # 添加微小延迟防止CPU占用过高
+        log.write_to_plain_text_3("升级线程已停止")
+
+    def stop_upgrade(self):
+        """停止升级线程（线程安全版）"""
+        self.lock.lock()
+        try:
+            self.is_running = False
+        finally:
+            self.lock.unlock()
