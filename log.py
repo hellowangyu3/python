@@ -18,6 +18,7 @@ RESULT_LOG_FILE_PATH = './result.txt'
 # 全局控件引用
 _plain_text_edit_3 = None
 _label_7_text_edit = None
+_progress_bar = None  # 新增：进度条控件引用
 
 # 初始化各日志类型对应的环形队列
 log_fifo = KFifoAps()          # 对应LOG_OPT_CMD
@@ -110,7 +111,7 @@ def log_info(cmd, info):
     # 关键修正：用UTF-8编码字符串为字节列表
     byte_data = _str_to_byte_list(log_content)
     target_fifo.put(byte_data)
-    print(log_content.strip())
+    # print(log_content.strip())
 
 def set_plain_text_edit_3(widget):
     """设置 plainTextEdit_3 文本框控件引用"""
@@ -153,6 +154,56 @@ def start_log_thread():
     log_thread = LogThread()
     log_thread.start()
     return log_thread
+
+def set_progress_bar(widget):
+    """设置进度条控件引用"""
+    global _progress_bar
+    _progress_bar = widget
+
+
+# 新增：简化的进度条更新函数（仅需当前值和最大值）
+def update_progress_bar(current_value, max_value):
+    """
+    更新进度条（自动处理最大值设置和进度值限制）
+    :param current_value: 当前进度值（必须为非负整数）
+    :param max_value: 进度条最大值（必须为正整数）
+    :return: bool - 操作是否成功
+    """
+    # 1. 检查进度条控件是否初始化
+    if not _progress_bar:
+        print("错误：进度条控件未初始化")
+        return False
+
+    # 2. 验证current_value类型和格式
+    if not isinstance(current_value, int):
+        print(f"错误：当前值必须为整数，实际为{type(current_value).__name__}")
+        return False
+    if current_value < 0:
+        print(f"错误：当前值不能为负数，实际为{current_value}")
+        return False
+
+    # 3. 验证max_value类型和格式
+    if not isinstance(max_value, int):
+        print(f"错误：最大值必须为整数，实际为{type(max_value).__name__}")
+        return False
+    if max_value <= 0:
+        print(f"错误：最大值必须为正数，实际为{max_value}")
+        return False
+
+    # 4. 检查当前值是否超过最大值（提前预警但不阻断）
+    if current_value > max_value:
+        print(f"警告：当前值({current_value})超过最大值({max_value})，将自动截断")
+
+    # 5. 更新最大值（仅当不同时更新，减少不必要的UI操作）
+    if _progress_bar.maximum() != max_value:
+        _progress_bar.setMaximum(max_value)
+
+    # 6. 限制当前值在有效范围内并更新
+    clamped_value = max(0, min(current_value, max_value))
+    _progress_bar.setValue(clamped_value)
+
+    return True
+    
 
 # 主程序入口示例
 if __name__ == "__main__":

@@ -83,6 +83,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionNULL1.setText("打开串口")
         log.set_plain_text_edit_3(self.plainTextEdit_3)  # 传递文本框引用
         log.set_label_7_text_edit(self.label_7)
+        log.set_progress_bar(self.progressBar)#传递进度条部件
                 # 初始化串口线程
         self.serial_thread = SerialThread(serial_if)    #把bsp的串口传给线程，让它去循环的读取数据
         self.serial_thread.data_received.connect(log.write_to_plain_text_3)
@@ -98,7 +99,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # 配置SpinBox
         self.spinBox_2.setMaximum(2048)
-        self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))
+        # self.spinBox.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox.value(), 1))//测试轮次，更改部件为labal直接显示
         self.spinBox_2.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_2.value(), 2))
         self.spinBox_max_size.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_max_size.value(), 3))
         self.spinBox_step_size.editingFinished.connect(lambda: self.save_spinbox_value(self.spinBox_step_size.value(), 4))

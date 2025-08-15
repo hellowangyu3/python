@@ -12,8 +12,8 @@ import time
 import log
 import config
 from protocol.gw13762 import create_default_frame
-from log import log_wp ,LOG_PROTOCOL_CMD,log_info
-from log import LOG_PROTOCOL_CMD
+from log import log_info
+from log import LOG_PROTOCOL_CMD ,update_progress_bar
 import queue
 from common import *
 from Upgrade_file_opt import get_file_version
@@ -22,6 +22,9 @@ import time
 
 parse_file1_path = "./firmware_output1.txt"
 parse_file2_path = "./firmware_output2.txt"
+
+
+
 
 class upgradeStateMachine:
     
@@ -78,10 +81,17 @@ class upgradeStateMachine:
             print(f"文件裁剪完成，共 {line_count} 行")
             log.log_info(LOG_PROTOCOL_CMD, f"文件裁剪完成，共 {line_count} 行, 文件路径: {self.currt_file_upgrade_prease},当前帧长{config.current_data_len}")
             self.dat_count_total = line_count
+            log.update_progress_bar(int(self.currt_data_cnt), int(self.dat_count_total))
             self.state_change(self.STATE_0)
+            return
         else:
             print(f"文件裁剪失败")
+            # self.state_change(self.STATE_EXITS)
+        self.send_cnt += 1
+        if self.send_cnt > 10:
             self.state_change(self.STATE_EXITS)
+            return 
+        time.sleep(1)#裁剪文件要费那么大劲，睡一会儿？？？
 
 
     def state0(self):
@@ -104,7 +114,9 @@ class upgradeStateMachine:
             log_info(LOG_PROTOCOL_CMD, "查询版本应答：" + str(response))
             print(f"厂商代码: {response['vendor_code']}, 芯片代码: {response['chip_code']}, 版本日期: {response['version_date']}, 版本号: {response['version']}")
             log_info(LOG_PROTOCOL_CMD, f"查询版本应答：{response}")
-            version, version_date, internal_version, internal_date = get_file_version(config.file1_path)
+            # 写的什么bug哇我靠
+            version, version_date, internal_version, internal_date = get_file_version(self.currt_data_file)
+
             if int(version) == int(response['version']) and version_date == response['version_date']:
                 log.write_to_plain_text_3(f"当前版本与升级文件相同{version}{version_date}")
                 # log.info(LOG_PROTOCOL_CMD, f"当前版本与升级文件相同{version}{version_date}")
@@ -112,9 +124,9 @@ class upgradeStateMachine:
                     self.currt_data_file = config.file2_path
                 else:
                     self.currt_data_file = config.file1_path
-                self.state_change(self.STATE_0)
+                self.state_change(self.STATE_INIT)#重新初始化！
                 return
-            self.state_change(self.STATE_1)
+            self.state_change(self.STATE_1)#走升级流程
             config.tx_ord += 1
             return
         except queue.Empty:
@@ -122,10 +134,7 @@ class upgradeStateMachine:
             log_info(LOG_PROTOCOL_CMD, "查询版本超时")
         self.state_change(self.STATE_0)
         return
-        # log.write_to_plain_text_3("TX:", ' '.join(f'{b:02X}' for b in veser_get_dat[0]))
 
-        # ...初始化逻辑...
-        # self.state = self.STATE_1
 
     def state1(self):
         # 准备工作，下发清除下装文件
@@ -150,10 +159,12 @@ class upgradeStateMachine:
     
     def state2(self):
         if self.currt_data_cnt >= self.dat_count_total:
+            log.write_to_plain_text_3(f"")
             log.write_to_plain_text_3("升级文件发送完毕")
+            self.currt_data_cnt = 0
             config.test_count += 1
             self.state_change(self.STATE_INIT)
-            time.sleep(10)
+            # time.sleep(10)
             return
 
         # 发送升级文件
@@ -210,6 +221,8 @@ class upgradeStateMachine:
 
         # 生成帧并发送（添加异常捕获）
         try:
+            if config.tx_ord >= 256:
+                config.tx_ord = 0
             gw13762_frame = create_default_frame(0x15, 1, config.tx_ord, full_bytes)
             # 检查帧生成结果是否有效
             if not gw13762_frame or len(gw13762_frame) == 0:
@@ -227,12 +240,14 @@ class upgradeStateMachine:
                 # 验证响应是否有效字典
                 if not isinstance(response, dict):
                     raise ValueError("响应不是有效的字典对象")
+                    return
 
                 log_info(LOG_PROTOCOL_CMD, "升级文件应答：" + str(response))
-
+                log.update_progress_bar(int(self.currt_data_cnt), int(self.dat_count_total))
                 # 检查响应中的必要键
                 if 'serial_num' not in response or 'page_num' not in response:
                     raise KeyError("响应缺少必要的字段")
+                    return
 
                 if response['serial_num'] == config.tx_ord and response['page_num'] == self.currt_data_cnt:
                     log_info(LOG_PROTOCOL_CMD, f"升级文件发送成功，第{self.currt_data_cnt}行")
@@ -240,10 +255,12 @@ class upgradeStateMachine:
                     config.tx_ord = (config.tx_ord + 1) % 256  # 使用模运算避免溢出
                     self.currt_data_cnt += 1
                     self.state_change(self.STATE_2)
+                    return
                 else:
                     log.log_info(LOG_PROTOCOL_CMD, f"serial_num: {response.get('serial_num')} page_num: {response.get('page_num')} {config.tx_ord} : {self.currt_data_cnt}")
                     log.write_to_plain_text_3(f"升级文件发送失败，第{self.currt_data_cnt}行")
                     self.state_change(self.STATE_EXITS)
+                    return 
 
             except queue.Empty:
                 log.write_to_plain_text_3("15F1发送超时")
@@ -276,72 +293,72 @@ class upgradeStateMachine:
 
 
 upgrade_addair = upgradeStateMachine()
-class UpgradeThread(QThread):
-    """升级线程：接收配置参数并执行升级逻辑，通过信号返回日志"""
-    log_signal = pyqtSignal(str)  # 发送日志信息给主窗口
+# class UpgradeThread(QThread):
+#     """升级线程：接收配置参数并执行升级逻辑，通过信号返回日志"""
+#     log_signal = pyqtSignal(str)  # 发送日志信息给主窗口
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.is_running = False  # 线程运行状态标志
-        self.upgrade_path = None
-        self.upgrade_total = 0
-        self.upgrade_state_machine = upgradeStateMachine()
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#         self.is_running = False  # 线程运行状态标志
+#         self.upgrade_path = None
+#         self.upgrade_total = 0
+#         self.upgrade_state_machine = upgradeStateMachine()
 
-    @pyqtSlot(dict)  # 接收主窗口发送的配置参数
-    def run_upgrade(self, config):
-        # self.config = config
-        self.is_running = True
-        log.write_to_plain_text_3("升级线程启动，开始执行升级...")
-        # self.upgrade_state_machine = upgradeStateMachine()
-        self.start()  # 启动线程，自动调用run()
-
-
-    def run(self):
-        while self.is_running:
-            self.upgrade_state_machine.step()
-            # log.write_to_plain_text_3("升级线程启动，开始执行升级...")
-            # time.sleep(0.5)
-
-    # def read_upgrade_file(self,num_of_bytes):
-    #
-    #     try:
-    #         with open(file_path, "rb") as f:
-    #             self.firmware_data = f.read()
-    #         self.log_signal.emit(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
+#     @pyqtSlot(dict)  # 接收主窗口发送的配置参数
+#     def run_upgrade(self, config):
+#         # self.config = config
+#         self.is_running = True
+#         log.write_to_plain_text_3("升级线程启动，开始执行升级...")
+#         # self.upgrade_state_machine = upgradeStateMachine()
+#         self.start()  # 启动线程，自动调用run()
 
 
-    def _read_upgrade_file(self, file_path):
-        """读取升级文件内容（内部辅助方法）"""
-        try:
-            with open(file_path, "rb") as f:
-                self.firmware_data = f.read()
-            log.write_to_plain_text_3(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
-            # 按128字节分割数据并打印
+#     def run(self):
+#         while self.is_running:
+#             self.upgrade_state_machine.step()
+#             # log.write_to_plain_text_3("升级线程启动，开始执行升级...")
+#             # time.sleep(0.5)
 
-            output_path = "./firmware_output.txt"
-            with open(output_path, "w") as out_f:
-                for i in range(0, len(self.firmware_data), 128):
-                    # 截取128字节数据并转换为十六进制字符串
-                    chunk = self.firmware_data[i:i + 128]
-                    hex_line = ' '.join(f'{byte:02x}' for byte in chunk)
-                    out_f.write(hex_line + '\n')
-            log.write_to_plain_text_3(f"数据已成功写入文件：{output_path}，共{len(self.firmware_data) // 128 + 1}行")
+#     # def read_upgrade_file(self,num_of_bytes):
+#     #
+#     #     try:
+#     #         with open(file_path, "rb") as f:
+#     #             self.firmware_data = f.read()
+#     #         self.log_signal.emit(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
 
-            return True
 
-        except Exception as e:
-            log.write_to_plain_text_3(f"读取升级文件失败: {str(e)}")
-            return False
+#     def _read_upgrade_file(self, file_path):
+#         """读取升级文件内容（内部辅助方法）"""
+#         try:
+#             with open(file_path, "rb") as f:
+#                 self.firmware_data = f.read()
+#             log.write_to_plain_text_3(f"成功读取升级文件：{file_path}，大小：{len(self.firmware_data)}字节")
+#             # 按128字节分割数据并打印
 
-    def _send_firmware_data(self, frame_length):
-        """分帧发送固件数据（内部辅助方法）"""
-        # ... 实现分帧发送逻辑（使用serial_bsp发送数据）...
-        pass
+#             output_path = "./firmware_output.txt"
+#             with open(output_path, "w") as out_f:
+#                 for i in range(0, len(self.firmware_data), 128):
+#                     # 截取128字节数据并转换为十六进制字符串
+#                     chunk = self.firmware_data[i:i + 128]
+#                     hex_line = ' '.join(f'{byte:02x}' for byte in chunk)
+#                     out_f.write(hex_line + '\n')
+#             log.write_to_plain_text_3(f"数据已成功写入文件：{output_path}，共{len(self.firmware_data) // 128 + 1}行")
 
-    def stop_upgrade(self):
-        """停止升级线程（供主窗口调用）"""
-        self.is_running = False
-        log.write_to_plain_text_3("升级线程已停止")
+#             return True
+
+#         except Exception as e:
+#             log.write_to_plain_text_3(f"读取升级文件失败: {str(e)}")
+#             return False
+
+#     def _send_firmware_data(self, frame_length):
+#         """分帧发送固件数据（内部辅助方法）"""
+#         # ... 实现分帧发送逻辑（使用serial_bsp发送数据）...
+#         pass
+
+#     def stop_upgrade(self):
+#         """停止升级线程（供主窗口调用）"""
+#         self.is_running = False
+#         log.write_to_plain_text_3("升级线程已停止")
 
 
 
